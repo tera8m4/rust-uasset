@@ -15,4 +15,7 @@ fn test_uasset_summary_parser() {
 
     assert_eq!(summary.export_count, 3);
     assert_eq!(summary.name_count, 30);
+
+    assert_eq!(parser.names.len(), summary.name_count as usize);
+    assert!(!parser.names.last().unwrap().is_empty());
 }

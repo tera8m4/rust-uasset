@@ -4,12 +4,13 @@ use crate::{
     errors::{ParseError, Result},
     uasset_summary::UassetSummary,
 };
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, SeekFrom};
 
 pub struct UassetParser<R: Read + Seek> {
     pub reader: R,
     pub summary: Option<UassetSummary>,
     pub allow_unversioned: bool,
+    pub names: Vec<String>,
 }
 
 pub trait Parsable<T> {
@@ -22,6 +23,7 @@ impl<R: Read + Seek> UassetParser<R> {
             reader,
             summary: None,
             allow_unversioned: true,
+            names: vec![],
         }
     }
 
@@ -35,6 +37,7 @@ impl<R: Read + Seek> UassetParser<R> {
     pub fn parse_asset(&mut self) -> Result<()> {
         let summary: UassetSummary = self.read()?;
         self.summary = Some(summary);
+        self.names = self.parse_names()?;
         Ok(())
     }
 
@@ -126,5 +129,27 @@ impl<R: Read + Seek> UassetParser<R> {
             return Err(ParseError::AssetVersionTooOld { major, minor });
         }
         Ok(())
+    }
+
+    fn skip_bytes(&mut self, n: i64) -> Result<()> {
+        self.reader.seek(SeekFrom::Current(n))?;
+        Ok(())
+    }
+
+    fn parse_names(&mut self) -> Result<Vec<String>> {
+        let offset: i32 = self.summary.as_ref().unwrap().name_offset;
+        let count: i32 = self.summary.as_ref().unwrap().name_count;
+
+        self.reader.seek(SeekFrom::Start(offset as u64))?;
+
+        let mut names = Vec::with_capacity(count as usize);
+
+        for _ in 0..count {
+            let name = self.read_fstring()?;
+            self.skip_bytes(4)?; // Skip precalculated hashes
+            names.push(name);
+        }
+
+        Ok(names)
     }
 }
