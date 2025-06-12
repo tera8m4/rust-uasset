@@ -1,0 +1,15 @@
+[package]
+name = "rust-uasset"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "rust_uasset"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rust_uasset"
+path = "src/main.rs"
+
+[dependencies]
+byteorder = "1.5.0"
