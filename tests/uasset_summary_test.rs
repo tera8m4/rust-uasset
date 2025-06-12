@@ -11,6 +11,8 @@ fn test_uasset_summary_parser() {
     let file = File::open(&file_path).expect("Failed to open test file");
     let mut parser = UassetParser::new(file);
     parser.parse_asset().expect("managed to parse the asset");
-    let summary = &parser.summary;
-    assert!(summary.is_some());
+    let summary = parser.summary.as_ref().expect("summary should present");
+
+    assert_eq!(summary.export_count, 3);
+    assert_eq!(summary.name_count, 30);
 }
