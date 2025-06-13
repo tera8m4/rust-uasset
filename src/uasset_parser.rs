@@ -2,15 +2,17 @@ use byteorder::{LittleEndian, ReadBytesExt};
 
 use crate::{
     errors::{ParseError, Result},
+    export_entry::ExportEntry,
     uasset_summary::UassetSummary,
 };
 use std::io::{Read, Seek, SeekFrom};
 
 pub struct UassetParser<R: Read + Seek> {
     pub reader: R,
-    pub summary: Option<UassetSummary>,
+    summary: Option<UassetSummary>,
     pub allow_unversioned: bool,
     pub names: Vec<String>,
+    pub entries: Vec<ExportEntry>,
 }
 
 pub trait Parsable<T> {
@@ -24,6 +26,7 @@ impl<R: Read + Seek> UassetParser<R> {
             summary: None,
             allow_unversioned: true,
             names: vec![],
+            entries: vec![],
         }
     }
 
@@ -34,10 +37,15 @@ impl<R: Read + Seek> UassetParser<R> {
         self.parse()
     }
 
+    pub fn get_summary(&self) -> &UassetSummary {
+        self.summary.as_ref().unwrap()
+    }
+
     pub fn parse_asset(&mut self) -> Result<()> {
         let summary: UassetSummary = self.read()?;
         self.summary = Some(summary);
         self.names = self.parse_names()?;
+        self.entries = self.parse_entries()?;
         Ok(())
     }
 
@@ -151,5 +159,22 @@ impl<R: Read + Seek> UassetParser<R> {
         }
 
         Ok(names)
+    }
+
+    fn parse_entries(&mut self) -> Result<Vec<ExportEntry>> {
+        let summary = self.summary.as_ref().unwrap();
+        let count = summary.export_count;
+        let offset = summary.export_offset;
+
+        self.reader.seek(SeekFrom::Start(offset as u64))?;
+
+        let mut entries = Vec::with_capacity(count as usize);
+
+        for _ in 0..count {
+            let entry: ExportEntry = self.read()?;
+            entries.push(entry);
+        }
+
+        Ok(entries)
     }
 }

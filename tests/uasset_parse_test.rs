@@ -11,11 +11,12 @@ fn test_uasset_summary_parser() {
     let file = File::open(&file_path).expect("Failed to open test file");
     let mut parser = UassetParser::new(file);
     parser.parse_asset().expect("managed to parse the asset");
-    let summary = parser.summary.as_ref().expect("summary should present");
+    let summary = parser.get_summary();
 
     assert_eq!(summary.export_count, 3);
     assert_eq!(summary.name_count, 30);
 
     assert_eq!(parser.names.len(), summary.name_count as usize);
     assert!(!parser.names.last().unwrap().is_empty());
+    assert_eq!(parser.entries.len(), summary.export_count as usize);
 }
