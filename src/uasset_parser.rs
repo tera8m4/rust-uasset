@@ -139,7 +139,7 @@ impl<R: Read + Seek> UassetParser<R> {
         Ok(())
     }
 
-    fn skip_bytes(&mut self, n: i64) -> Result<()> {
+    pub fn skip_bytes(&mut self, n: i64) -> Result<()> {
         self.reader.seek(SeekFrom::Current(n))?;
         Ok(())
     }

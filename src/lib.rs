@@ -1,6 +1,10 @@
+pub mod data;
 pub mod errors;
 pub mod export_entry;
 pub mod fname;
+pub mod property_data;
+pub mod property_tag;
+pub mod property_type_name;
 pub mod uasset_parser;
 pub mod uasset_summary;
 pub mod versions;

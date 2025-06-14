@@ -34,4 +34,8 @@ impl FName {
     pub fn as_string(&self) -> String {
         self.value.clone()
     }
+
+    pub fn is_none(&self) -> bool {
+        self.value == "None"
+    }
 }
