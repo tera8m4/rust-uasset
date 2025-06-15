@@ -46,7 +46,6 @@ impl PropertyTag {
 impl<R: Read + Seek> Parsable<PropertyTag> for UassetParser<R> {
     fn parse(&mut self) -> Result<PropertyTag> {
         let name: FName = self.read()?;
-        println!("property name: {} i {}", name.as_string(), name.index);
         if name.is_none() {
             return Ok(PropertyTag::new(name));
         }

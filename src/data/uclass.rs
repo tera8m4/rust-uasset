@@ -9,12 +9,10 @@ use crate::{
 
 pub struct UClassData {
     pub properties: Vec<PropertyData>,
-    pub flags: u8,
 }
 
 impl<R: Read + Seek> Parsable<UClassData> for UassetParser<R> {
     fn parse(&mut self) -> Result<UClassData> {
-        let flags = self.reader.read_u8()?;
         let mut properties = Vec::new();
 
         loop {
@@ -27,6 +25,6 @@ impl<R: Read + Seek> Parsable<UClassData> for UassetParser<R> {
 
         self.skip_bytes(4)?; // todo: figure out why it's needed
 
-        Ok(UClassData { properties, flags })
+        Ok(UClassData { properties, })
     }
 }
