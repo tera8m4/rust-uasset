@@ -14,16 +14,17 @@ pub struct FName {
 
 impl<R: Read + Seek> Parsable<FName> for UassetParser<R> {
     fn parse(&mut self) -> Result<FName> {
-        let index: usize = self.reader.read_i32::<LittleEndian>()? as usize;
+        let index = self.reader.read_i32::<LittleEndian>()?;
         let number = self.reader.read_i32::<LittleEndian>()?;
-        let value: String = if index < self.names.len() {
-            self.names[index].clone()
+        let len = self.names.len() as i32;
+        let value: String = if index < len {
+            self.names[index as usize].clone()
         } else {
             "None".into()
         };
 
         Ok(FName {
-            index: index as i32,
+            index,
             number,
             value,
         })

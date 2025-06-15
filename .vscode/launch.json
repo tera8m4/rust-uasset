@@ -1,0 +1,49 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "codelldb",
+            "request": "launch",
+            "name": "Debug export_data_test",
+            "program": "${workspaceFolder}/target/debug/deps/export_data_test-*",
+            "args": ["test_export_data_parsing", "--exact", "--nocapture"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "sourceLanguages": ["rust"],
+            "preLaunchTask": "cargo test --no-run test_export_data_test"
+        },
+        {
+            "type": "lldb",
+            "request": "launch", 
+            "name": "Debug uasset_parse_test",
+            "program": "${workspaceFolder}/target/debug/deps/uasset_parse_test-*",
+            "args": ["test_uasset_summary_parser", "--exact", "--nocapture"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "sourceLanguages": ["rust"],
+            "preLaunchTask": "cargo test --no-run uasset_parse_test"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug specific_type_parsing test",
+            "program": "${workspaceFolder}/target/debug/deps/export_data_test-*",
+            "args": ["test_specific_type_parsing", "--exact", "--nocapture"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "sourceLanguages": ["rust"],
+            "preLaunchTask": "cargo test --no-run export_data_test"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug main binary",
+            "program": "${workspaceFolder}/target/debug/rust_uasset",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "sourceLanguages": ["rust"],
+            "preLaunchTask": "cargo build bin"
+        }
+    ]
+}

@@ -1,0 +1,37 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "cargo",
+            "command": "test",
+            "args": ["--no-run", "--test", "export_data_test"],
+            "group": "build",
+            "label": "cargo test --no-run export_data_test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "type": "cargo",
+            "command": "test",
+            "args": ["--no-run", "--test", "uasset_parse_test"],
+            "group": "build",
+            "label": "cargo test --no-run uasset_parse_test",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "type": "cargo",
+            "command": "test",
+            "args": ["--no-run"],
+            "group": "build",
+            "label": "cargo test --no-run",
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "type": "cargo",
+            "command": "build",
+            "args": ["--bin", "rust_uasset"],
+            "group": "build",
+            "label": "cargo build bin",
+            "problemMatcher": ["$rustc"]
+        }
+    ]
+}
