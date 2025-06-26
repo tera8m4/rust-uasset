@@ -33,7 +33,11 @@ impl<R: Read + Seek> Parsable<FName> for UassetParser<R> {
 
 impl FName {
     pub fn as_string(&self) -> String {
-        self.value.clone()
+        if self.number > 0 {
+            format!("{}_{}", self.value, self.number - 1)
+        } else {
+            self.value.clone()
+        }
     }
 
     pub fn is_none(&self) -> bool {
