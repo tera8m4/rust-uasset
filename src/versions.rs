@@ -61,4 +61,6 @@ pub enum EUnrealEngineObjectUE5Version {
 
     // Adds a table of hierarchical type information for imports in a package
     ImportTypeHierarchies,
+
+    Latest,
 }

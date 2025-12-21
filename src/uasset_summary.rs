@@ -90,7 +90,7 @@ impl<R: Read + Seek> Parsable<UassetSummary> for UassetParser<R> {
 
         s.file_version_licensee_ue4 = self.reader.read_u32::<LittleEndian>()?;
 
-        const KNOWN_SUPPORTED_UE5VER: i32 = 1017;
+        const KNOWN_SUPPORTED_UE5VER: i32 = EUnrealEngineObjectUE5Version::Latest as i32;
         if s.file_version_ue5 > KNOWN_SUPPORTED_UE5VER {
             eprintln!(
                 "Warning: ObjectUE5Version {} too new; newest known supported version {}",
