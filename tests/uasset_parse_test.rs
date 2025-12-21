@@ -1,9 +1,8 @@
 use std::{fs::File, io::Seek};
 
-use byteorder::{LittleEndian, ReadBytesExt};
 use common::test_data_path;
-use rust_uasset::{data::uclass::UClassData, uasset_parser::UassetParser};
 use rust_uasset::data::data_table::DataTable;
+use rust_uasset::uasset_parser::UassetParser;
 
 mod common;
 
@@ -39,4 +38,22 @@ fn test_export_data_parser() {
 
     let data_table: DataTable = parser.read().expect("Failed to parse data table");
     assert_eq!(data_table.rows.len(), 2);
+}
+
+#[test]
+fn test_data_table_ue57() {
+    let file_path = test_data_path("DT_UE57.uasset");
+    let file = File::open(&file_path).expect("Failed to open test file");
+    let mut parser = UassetParser::new(file);
+    parser.parse_asset().expect("managed to parse the asset");
+
+    parser
+        .reader
+        .seek(std::io::SeekFrom::Start(
+            parser.entries[1].serial_offset as u64,
+        ))
+        .expect("failed to seek");
+
+    let data_table: DataTable = parser.read().expect("Failed to parse data table");
+    assert_eq!(data_table.rows.len(), 4);
 }

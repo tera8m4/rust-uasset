@@ -1,3 +1,5 @@
+// Source/Runtime/Core/Public/UObject/ObjectVersion.h
+
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(dead_code)]
@@ -56,4 +58,7 @@ pub enum EUnrealEngineObjectUE5Version {
 
     // OS shadow serialization of subobjects
     OsSubObjectShadowSerialization,
+
+    // Adds a table of hierarchical type information for imports in a package
+    ImportTypeHierarchies,
 }

@@ -38,6 +38,8 @@ pub struct UassetSummary {
     pub soft_package_references_offset: i32,
     pub searchable_names_offset: i32,
     pub thumbnail_table_offset: i32,
+    pub import_type_hierarchies_count: i32,
+    pub import_type_hierarchies_offset: i32,
     pub guid: Option<[u8; 16]>,
     pub persistent_guid: [u8; 16],
     pub generations: Vec<[u8; 8]>,
@@ -152,6 +154,14 @@ impl<R: Read + Seek> Parsable<UassetSummary> for UassetParser<R> {
         s.soft_package_references_offset = self.reader.read_i32::<LittleEndian>()?;
         s.searchable_names_offset = self.reader.read_i32::<LittleEndian>()?;
         s.thumbnail_table_offset = self.reader.read_i32::<LittleEndian>()?;
+
+        if s.file_version_ue5 >= EUnrealEngineObjectUE5Version::ImportTypeHierarchies as i32 {
+            s.import_type_hierarchies_count = self.reader.read_i32::<LittleEndian>()?;
+            s.import_type_hierarchies_offset = self.reader.read_i32::<LittleEndian>()?;
+        } else {
+            s.import_type_hierarchies_count = 0;
+            s.import_type_hierarchies_offset = 0;
+        }
 
         if s.file_version_ue5 < EUnrealEngineObjectUE5Version::PackageSavedHash as i32 {
             let mut guid = [0u8; 16];
