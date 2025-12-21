@@ -17,7 +17,7 @@ pub struct DataTable {
 
 impl<R: Read + Seek> Parsable<DataTable> for UassetParser<R> {
     fn parse(&mut self) -> Result<DataTable> {
-        let flags = self.reader.read_u8()?;
+        let _flags = self.reader.read_u8()?;
         let class_data: UClassData = self.read()?;
         let mut rows_count: i32 = self.reader.read_i32::<LittleEndian>()?;
         let mut rows: Vec<HashMap<String, String>> = vec![];
@@ -34,7 +34,6 @@ impl<R: Read + Seek> Parsable<DataTable> for UassetParser<R> {
                     rows.push(values);
                     break;
                 }
-                let tag = &property_data.tag;
                 let value: String = match property_data.value {
                     PropertyValue::StrProperty(value) => value,
                     _ => String::new(),
@@ -45,9 +44,6 @@ impl<R: Read + Seek> Parsable<DataTable> for UassetParser<R> {
             rows_count -= 1;
         }
 
-        Ok(DataTable {
-            class_data,
-            rows,
-        })
+        Ok(DataTable { class_data, rows })
     }
 }

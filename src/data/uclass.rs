@@ -1,4 +1,3 @@
-use byteorder::ReadBytesExt;
 use std::io::{Read, Seek};
 
 use crate::errors::Result;
@@ -25,6 +24,6 @@ impl<R: Read + Seek> Parsable<UClassData> for UassetParser<R> {
 
         self.skip_bytes(4)?; // todo: figure out why it's needed
 
-        Ok(UClassData { properties, })
+        Ok(UClassData { properties })
     }
 }
