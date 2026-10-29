@@ -338,6 +338,12 @@ fn write_node(c: &Ctx, out: &mut Out, g: &GraphCtx, n: &Object) {
         if c.opts.verbose && matches!(p.name.as_str(), "Pins" | "NodePosX" | "NodePosY" | "NodeGuid") {
             continue;
         }
+        if p.name == "FunctionFlags" {
+            if let Some(f) = p.value.as_i64() {
+                out.line(2, format!("FunctionFlags: {}", super::function_flags(f as u32)));
+                continue;
+            }
+        }
         c.write_kv(out, 2, &p.display_name(), &p.value);
     }
     // pins

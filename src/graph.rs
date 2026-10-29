@@ -342,7 +342,9 @@ pub fn read_node_pins(pkg: &Package, r: &mut Reader, self_index: i32) -> Result<
         if owner != self_index {
             return invalid(format!("pin owner {owner} does not match node {self_index}"));
         }
-        pins.push(read_pin(pkg, r)?);
+        let at = r.pos();
+        let pin = read_pin(pkg, r).map_err(|e| crate::errors::ParseError::Invalid(format!("pin #{} at offset {at:#x}: {e}", pins.len())))?;
+        pins.push(pin);
     }
     Ok(pins)
 }

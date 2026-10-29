@@ -119,6 +119,9 @@ fn read_text_depth(pkg: &Package, r: &mut Reader, depth: u32) -> Result<Text> {
             let namespace = r.fstring()?;
             let key = r.fstring()?;
             let source = r.fstring()?;
+            if pkg.custom_ver(custom::fortnite_main()) >= custom::FN_ADD_DEV_NOTES_TO_FTEXT && !pkg.is_filter_editor_only() {
+                r.fstring()?; // DevNotes
+            }
             Text::Base { namespace, key, source }
         }
         1 => {

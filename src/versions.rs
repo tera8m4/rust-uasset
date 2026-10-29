@@ -119,4 +119,5 @@ pub mod custom {
         Guid::from_u32s(0x601D1886, 0xAC644F84, 0xAA16D3DE, 0x0DEAC7D6)
     }
     pub const FN_MATERIAL_INPUT_USES_LINEAR_COLOR: i32 = 171;
+    pub const FN_ADD_DEV_NOTES_TO_FTEXT: i32 = 260;
 }
