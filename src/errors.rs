@@ -1,40 +1,34 @@
-use std::io;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ParseError {
     #[error("IO error: {0}")]
-    Io(#[from] io::Error),
+    Io(String),
 
-    #[error("Invalid uasset tag")]
+    #[error("not a uasset file (bad magic tag)")]
     InvalidTag,
 
-    #[error("Unsupported legacy file version: {0}")]
+    #[error("unsupported legacy file version: {0}")]
     UnsupportedLegacyVersion(i32),
 
-    #[error("Invalid file offset: {offset} (file size: {file_size})")]
-    InvalidFileOffset { offset: i64, file_size: u64 },
+    #[error("unexpected end of data at offset {pos} (need {need} bytes)")]
+    Eof { pos: usize, need: usize },
 
-    #[error("Invalid array size: {0}")]
-    InvalidArraySize(i32),
+    #[error("{0}")]
+    Invalid(String),
 
-    #[error("Invalid compression flags")]
-    InvalidCompressionFlags,
+    #[error("{0}")]
+    Unsupported(String),
+}
 
-    #[error("Compressed chunks not supported")]
-    CompressedChunksNotSupported,
-
-    #[error("Unversioned asset parsing not allowed")]
-    UnversionedAssetNotAllowed,
-
-    #[error("Asset version too old: {major}.{minor} (minimum: 4.27)")]
-    AssetVersionTooOld { major: u16, minor: u16 },
-
-    #[error("Invalid UTF-8 string")]
-    InvalidUtf8(#[from] std::string::FromUtf8Error),
-
-    #[error("Invalid UTF-16 string")]
-    InvalidUtf16,
+impl From<std::io::Error> for ParseError {
+    fn from(e: std::io::Error) -> Self {
+        ParseError::Io(e.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, ParseError>;
+
+pub fn invalid<T>(msg: impl Into<String>) -> Result<T> {
+    Err(ParseError::Invalid(msg.into()))
+}

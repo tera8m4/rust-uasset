@@ -1,6 +1,6 @@
 [package]
 name = "rust-uasset"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
@@ -8,9 +8,13 @@ name = "rust_uasset"
 path = "src/lib.rs"
 
 [[bin]]
-name = "rust_uasset"
+name = "uasset"
 path = "src/main.rs"
 
+[[bin]]
+name = "uasset_stats"
+path = "src/bin/uasset_stats.rs"
+
 [dependencies]
-byteorder = "1.5.0"
+
 thiserror = "2.0.12"
