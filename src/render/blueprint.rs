@@ -450,6 +450,23 @@ fn signature(c: &Ctx, nodes: &[&Object]) -> Option<String> {
 }
 
 fn write_graph(c: &mut Ctx, out: &mut Out, graph: i32, kind: &str, done: &mut HashSet<i32>) {
+    if !c.opts.nodes {
+        if c.covered.contains(&graph) || !done.insert(graph) {
+            return;
+        }
+        let (code, covered) = crate::ast::bp::graph_to_code(c, graph, kind);
+        for i in covered {
+            c.cover(i);
+            done.insert(i);
+        }
+        c.cover(graph);
+        out.blank();
+        out.line(0, format!("### {} {}", capitalize(kind), c.name(graph)));
+        out.line(0, "```");
+        out.s.push_str(&code);
+        out.line(0, "```");
+        return;
+    }
     if !done.insert(graph) {
         return;
     }

@@ -26,11 +26,13 @@ pub struct Options {
     pub max_string: usize,
     /// Only print the header/summary.
     pub summary_only: bool,
+    /// Print graphs as node listings instead of pseudocode.
+    pub nodes: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { verbose: false, show_other_objects: true, show_imports: false, show_exports: false, max_string: 2000, summary_only: false }
+        Self { verbose: false, show_other_objects: true, show_imports: false, show_exports: false, max_string: 2000, summary_only: false, nodes: false }
     }
 }
 
@@ -527,11 +529,13 @@ fn write_header(c: &Ctx, out: &mut Out) {
 }
 
 fn write_registry(c: &Ctx, out: &mut Out) {
+    const ALWAYS_HIDDEN: &[&str] = &["FiBData"];
     const NOISY: &[&str] = &["LinterCoreResult", "LinterCoreAssetDependencies", "AssetImportData", "FiBData", "ClassFlags", "NumReplicatedProperties", "ImportedNamespaces"];
     for e in &c.pkg.asset_registry {
         let tags: Vec<&(String, String)> = e
             .tags
             .iter()
+            .filter(|(k, _)| !ALWAYS_HIDDEN.contains(&k.as_str()))
             .filter(|(k, v)| c.opts.verbose || (!NOISY.contains(&k.as_str()) && v.len() < 400))
             .collect();
         if tags.is_empty() {

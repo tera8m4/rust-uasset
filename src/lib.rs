@@ -1,6 +1,7 @@
 //! Parser for Unreal Engine `.uasset` / `.umap` packages (editor format, UE 4.x - 5.8) with
 //! LLM friendly text output.
 
+pub mod ast;
 pub mod errors;
 pub mod graph;
 pub mod object;

@@ -19,27 +19,45 @@ target/release/uasset [OPTIONS] <PATH>...
 | `-v, --verbose` | everything: pin types, node positions, registry tags, undecoded data, metadata |
 | `--summary` | header, asset registry tags and dependencies only |
 | `--imports` / `--exports` | print the import / export tables |
+| `--nodes` | print graphs as numbered node listings instead of pseudocode |
 | `--no-other` | hide objects that are not part of the main view |
 | `--max-string <N>` | shorten long strings (default 2000, 0 = unlimited) |
 
 ## What is shown
 
-- **Blueprints** (actor, widget, editor utility, ...): parent class, interfaces, variables with types,
-  defaults and flags, component tree (SCS) and inherited component overrides, widget tree with slot
-  settings, class defaults, and every graph (event graph, functions with signatures, macros,
-  collapsed graphs). Graph nodes are numbered in execution order:
+- **Blueprints** (actor, widget, anim, editor utility, ...): parent class, interfaces, variables with
+  types, defaults and flags, component tree (SCS) and inherited component overrides, widget tree with
+  slot settings, class defaults, and every graph as pseudocode:
 
   ```
-  ### Function IsActionForBlueprints() -> (ReturnValue: bool)  [BlueprintPure, Const]
-    N1 Entry AssetActionUtility::IsActionForBlueprints
-      -> N2
-    N2 Return
-      ReturnValue = true
+  event ReceiveBeginPlay() [override] {
+      super.ReceiveBeginPlay()
+      goto L1_MacroForEachLoop
+  }
+
+  event OnPlayerInitialized() [override] {
+      super.OnPlayerInitialized()
+      if (HasAuthority()) {
+          goto L1_MacroForEachLoop
+      }
+  }
+
+  L1_MacroForEachLoop: {
+      for (Element, Index in CapsuleComponent.GetOverlappingActors(ClassFilter: /Game/.../BP_Volume.BP_Volume_C)) {
+          if (let AsBPVolume = cast<BP_Volume_C>(Element)) {
+              AsBPVolume.HandleOverlapBegin(Character: self)
+          }
+      }
+  }
   ```
-  Exec links are listed on the source pin (`-> N2`), data links on the consuming pin
-  (`Target <- N3.ReturnValue (Get Foo)`), unconnected inputs with their default values.
-- **Materials / material functions**: settings, connected outputs and the expression graph
-  (`BaseColor <- E1.RGB (VectorParameter "Color")`), comment boxes and the expressions they contain.
+  Exec wires become statements (`if`, `switch`, loops for the standard macros, `await` for latent
+  calls, `goto` to labelled shared blocks where wires merge), pure nodes become inline expressions,
+  math library calls become operators. Overrides that only call `super` are omitted (listed in a
+  comment). Anim graphs print the pose pipeline as `let` statements; state machines list states,
+  aliases and transitions with their rule expressions. `--nodes` prints the raw node listing instead.
+- **Materials / material functions**: settings, comments, parameters and HLSL-like code for every
+  connected output (`BaseColor = lerp(...)`); shared expressions become `let`s and expressions not
+  connected to any output are listed.
 - **Material instances**: parent, scalar / vector / texture / static switch parameters, overrides.
 - **DataTables**: row struct and one line (or block) per row.
 - **DataAssets and any other asset**: all tagged properties of the main object.

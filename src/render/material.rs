@@ -16,13 +16,13 @@ pub fn is_material_like(class: &str) -> bool {
 }
 
 /// (expression, output index, mask suffix, input name)
-struct InputRef {
-    expr: i32,
-    output_index: i64,
-    mask: String,
+pub(crate) struct InputRef {
+    pub expr: i32,
+    pub output_index: i64,
+    pub mask: String,
 }
 
-fn as_input(v: &Value) -> Option<InputRef> {
+pub(crate) fn as_input(v: &Value) -> Option<InputRef> {
     let s = v.as_struct()?;
     let expr = s.get("Expression")?.as_object()?;
     let output_index = s.get("OutputIndex").and_then(|x| x.as_i64()).unwrap_or(0);
@@ -38,7 +38,7 @@ fn as_input(v: &Value) -> Option<InputRef> {
     Some(InputRef { expr, output_index, mask })
 }
 
-fn is_input_struct(v: &Value) -> bool {
+pub(crate) fn is_input_struct(v: &Value) -> bool {
     match v {
         Value::Struct(s) => s.type_name.ends_with("Input") || (s.get("Expression").is_some() && s.get("OutputIndex").is_some()),
         _ => false,
@@ -436,6 +436,8 @@ pub fn render(c: &mut Ctx, out: &mut Out, o: &Object) {
         "ExpressionCollection", "Expressions", "FunctionExpressions", "EditorComments", "StateId", "LightingGuid",
         "ThumbnailInfo", "ReferencedTextureGuids", "CachedExpressionData", "EditorX", "EditorY", "EditorPitch", "EditorYaw",
         "MaterialGraph", "ParameterGroupData", "bCanMaskedBeAssumedOpaque", "CustomizedUVs", "Expressions",
+        "DependentFunctionExpressionCandidates", "CombinedInputTypes", "CombinedOutputTypes", "EditorOnlyData",
+        "ParameterOverviewExpansion", "PreviewMesh", "bEnableExecWire", "bEnableNewHLSLGenerator",
     ];
     let settings: Vec<Property> = all_props
         .iter()
@@ -445,6 +447,31 @@ pub fn render(c: &mut Ctx, out: &mut Out, o: &Object) {
     if !settings.is_empty() {
         out.line(0, "Settings:");
         c.write_props(out, 1, &settings);
+    }
+    if !c.opts.nodes {
+        if !comments.is_empty() {
+            out.line(0, "Comments:");
+            for cm in &comments {
+                if let Some(co) = c.obj(*cm) {
+                    c.cover(co.index);
+                    let text = co.prop("Text").and_then(|v| v.as_str()).unwrap_or("").replace('\r', "").replace('\n', " / ");
+                    out.line(1, format!("// {}", c.quote(&text)));
+                }
+            }
+        }
+        let kind = if o.class.starts_with("MaterialFunction") { "function" } else { "material" };
+        let code = crate::ast::material::material_to_code(c, &name, kind, &outputs, &order);
+        out.line(0, "```");
+        out.s.push_str(&code);
+        out.line(0, "```");
+        for e in &order {
+            c.cover(*e);
+        }
+        let graph_objs: Vec<i32> = c.objs.iter().filter(|x| x.class.starts_with("MaterialGraph")).map(|x| x.index).collect();
+        for g in graph_objs {
+            c.cover(g);
+        }
+        return;
     }
     if !outputs.is_empty() {
         out.line(0, "Outputs:");

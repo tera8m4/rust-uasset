@@ -104,6 +104,9 @@ fn local_asset_dir() {
         }
         let text = asset.to_text(&Options::default());
         assert!(!text.contains("!! decode error"), "{}", path.display());
+        assert!(!text.contains("<cycle>") && !text.contains("<...>"), "{}", path.display());
+        let nodes = asset.to_text(&Options { nodes: true, ..Options::default() });
+        assert!(!nodes.contains("!! decode error"), "{}", path.display());
         count += 1;
     }
     assert!(count > 0, "no assets in {dir}");

@@ -715,8 +715,22 @@ impl<'p> PropReader<'p> {
         match native {
             Some(false) => return tagged(r),
             Some(true) => {
+                if size == Some(0) {
+                    return Ok(Value::Struct(Box::new(StructValue { type_name: sname.to_string(), fields: vec![], native: true })));
+                }
                 if let Some(v) = structs::read_native(self, r, sname, size, depth)? {
                     return Ok(v);
+                }
+                // Many "native" structs only hook Serialize and fall back to tagged properties.
+                if self.looks_like_tagged(r, size) {
+                    let start = r.pos();
+                    let mut t = r.clone();
+                    if let Ok(v) = tagged(&mut t) {
+                        if size.map(|s| t.pos() == start + s).unwrap_or(true) {
+                            *r = t;
+                            return Ok(v);
+                        }
+                    }
                 }
                 return match size {
                     Some(s) => Ok(Value::Raw { type_name: sname.into(), bytes: r.bytes(s)?.to_vec(), note: "native struct".into() }),
