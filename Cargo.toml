@@ -2,6 +2,13 @@
 name = "rust-uasset"
 version = "0.2.0"
 edition = "2024"
+rust-version = "1.85"
+description = "Reads Unreal Engine .uasset / .umap packages and prints them as compact, LLM friendly text or JSON"
+license = "MIT-0"
+repository = "https://github.com/tera8m4/rust-uasset"
+readme = "README.md"
+keywords = ["unreal", "uasset", "ue5", "blueprint", "parser"]
+categories = ["game-development", "parser-implementations", "command-line-utilities"]
 
 [lib]
 name = "rust_uasset"
