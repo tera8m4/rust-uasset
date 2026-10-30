@@ -8,7 +8,7 @@ use crate::object::Object;
 use crate::property::{StructValue, Value, clean_field_name};
 
 pub fn is_blueprint(o: &Object) -> bool {
-    (o.class.ends_with("Blueprint") || o.class == "BlueprintGeneratedClass" && false)
+    o.class.ends_with("Blueprint")
         && (o.prop("ParentClass").is_some() || o.prop("GeneratedClass").is_some() || o.prop("UbergraphPages").is_some())
 }
 

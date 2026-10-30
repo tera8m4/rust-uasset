@@ -202,10 +202,11 @@ fn write_expression(c: &mut Ctx, out: &mut Out, m: &MatCtx, e: &Object) {
                 continue;
             }
         }
-        if EXPR_SKIP.contains(&p.name.as_str()) && !c.opts.verbose {
-            if !matches!(p.name.as_str(), "Text") || !e.class.contains("Comment") {
-                continue;
-            }
+        if EXPR_SKIP.contains(&p.name.as_str())
+            && !c.opts.verbose
+            && (p.name != "Text" || !e.class.contains("Comment"))
+        {
+            continue;
         }
         c.write_kv(out, 2, &p.display_name(), &p.value);
     }

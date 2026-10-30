@@ -632,9 +632,7 @@ impl<'p> PropReader<'p> {
                 return self.read_unknown_struct(r, depth, container);
             }
             // In 5.4+ the container flag is "any element is native"; resolve per struct.
-            let native = if structs::has_native_parser(&sname) || structs::is_known_native(&sname) {
-                None
-            } else if container == "MapProperty" {
+            let native = if structs::has_native_parser(&sname) || structs::is_known_native(&sname) || container == "MapProperty" {
                 None
             } else {
                 ctx.native

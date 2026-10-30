@@ -157,7 +157,7 @@ fn read_text_depth(pkg: &Package, r: &mut Reader, depth: u32) -> Result<Text> {
             }
             Text::NamedFormat { format, args }
         }
-        4 | 5 | 6 => {
+        4..=6 => {
             let kind = match history {
                 4 => "AsNumber",
                 5 => "AsPercent",

@@ -299,10 +299,8 @@ impl<'a, 'c> GraphBuilder<'a, 'c> {
         let op = BINARY_OPS.iter().find(|(p, _)| func.starts_with(p)).map(|(_, o)| *o)?;
         let inputs: Vec<&'a Pin> = n.pins().iter().filter(|p| !p.is_output() && !is_exec(p) && p.name != "self" && !p.hidden).collect();
         let operands: Vec<&'a Pin> = inputs.iter().copied().filter(|p| p.name.len() <= 2 || p.name.starts_with('A') || p.name.starts_with('B')).collect();
-        if operands.len() < 2 || operands.len() != inputs.len() && func.starts_with("EqualEqual") && inputs.len() > 2 {
-            if operands.len() < 2 {
-                return None;
-            }
+        if operands.len() < 2 {
+            return None;
         }
         let mut it = operands.into_iter();
         let first = it.next()?;
@@ -1442,17 +1440,14 @@ fn state_machine<'a>(c: &Ctx, b: &GraphBuilder<'a, '_>) -> (Vec<Stmt>, Vec<i32>)
     // pin -> owning node lookup
     let owner_of = |r: &crate::graph::PinRef| r.node;
     for n in b.nodes() {
-        match n.class.as_str() {
-            "AnimStateEntryNode" => {
-                for p in n.pins().iter().filter(|p| p.is_output()) {
-                    for l in &p.linked_to {
-                        if let Some(t) = c.obj(owner_of(l)) {
-                            out.push(Stmt::Line(format!("entry -> {}", crate::render::json::quote(&state_name(t)))));
-                        }
+        if n.class == "AnimStateEntryNode" {
+            for p in n.pins().iter().filter(|p| p.is_output()) {
+                for l in &p.linked_to {
+                    if let Some(t) = c.obj(owner_of(l)) {
+                        out.push(Stmt::Line(format!("entry -> {}", crate::render::json::quote(&state_name(t)))));
                     }
                 }
             }
-            _ => {}
         }
     }
     for n in b.nodes() {
@@ -1510,7 +1505,7 @@ fn state_machine<'a>(c: &Ctx, b: &GraphBuilder<'a, '_>) -> (Vec<Stmt>, Vec<i32>)
             .find(|p| !p.is_output())
             .and_then(|p| p.linked_to.first())
             .and_then(|l| c.obj(l.node))
-            .map(|o| state_name(o))
+            .map(state_name)
             .unwrap_or("?".into());
         let to = n
             .pins()
@@ -1518,7 +1513,7 @@ fn state_machine<'a>(c: &Ctx, b: &GraphBuilder<'a, '_>) -> (Vec<Stmt>, Vec<i32>)
             .find(|p| p.is_output())
             .and_then(|p| p.linked_to.first())
             .and_then(|l| c.obj(l.node))
-            .map(|o| state_name(o))
+            .map(state_name)
             .unwrap_or("?".into());
         let mut rule = String::new();
         if let Some(g) = n.prop("BoundGraph").and_then(|v| v.as_object()).and_then(|i| c.obj(i)) {

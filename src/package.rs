@@ -345,7 +345,7 @@ impl Package {
             if ue4v >= ue4::ADDED_PACKAGE_OWNER {
                 s.persistent_guid = Some(r.guid()?);
             }
-            if ue4v >= ue4::ADDED_PACKAGE_OWNER && ue4v < ue4::NON_OUTER_PACKAGE_IMPORT {
+            if (ue4::ADDED_PACKAGE_OWNER..ue4::NON_OUTER_PACKAGE_IMPORT).contains(&ue4v) {
                 r.guid()?; // OwnerPersistentGuid
             }
         }
@@ -464,9 +464,7 @@ impl Package {
             let outer_index = r.i32()?;
             let object_name = self.read_fname(&mut r)?;
             let mut package_name = String::from("None");
-            if s.file_version_ue4 >= ue4::NON_OUTER_PACKAGE_IMPORT && !self.is_filter_editor_only() {
-                package_name = self.read_fname(&mut r)?;
-            } else if s.file_version_ue4 >= ue4::NON_OUTER_PACKAGE_IMPORT {
+            if s.file_version_ue4 >= ue4::NON_OUTER_PACKAGE_IMPORT {
                 package_name = self.read_fname(&mut r)?;
             }
             let mut optional = false;
