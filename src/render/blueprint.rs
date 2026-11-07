@@ -812,10 +812,16 @@ pub fn render(c: &mut Ctx, out: &mut Out, bp: &Object) {
     for b in bindings {
         c.cover(b);
     }
-    let anims = objects_in(bp.prop("Animations"));
-    if !anims.is_empty() {
-        let names: Vec<String> = anims.iter().map(|a| c.name(*a)).collect();
-        out.line(0, format!("Widget animations: {}", names.join(", ")));
+    // Widget animations. The generated class carries a compiled copy of each of them.
+    let mut anims = objects_in(bp.prop("Animations"));
+    let compiled = objects_in(gen_class.and_then(|g| c.obj(g)).and_then(|g| g.prop("Animations")));
+    if anims.is_empty() {
+        anims = compiled.clone();
+    }
+    let parsed: Vec<_> = anims.iter().filter_map(|a| crate::movie_scene::read_widget_animation(c.pkg, c.objs, *a)).collect();
+    super::anim::write_animations(c, out, &parsed);
+    for a in anims.into_iter().chain(compiled) {
+        c.cover_subtree(a);
     }
 
     // Class defaults

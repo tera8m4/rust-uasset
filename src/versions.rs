@@ -120,4 +120,10 @@ pub mod custom {
     }
     pub const FN_MATERIAL_INPUT_USES_LINEAR_COLOR: i32 = 171;
     pub const FN_ADD_DEV_NOTES_TO_FTEXT: i32 = 260;
+    pub const FN_SERIALIZE_FLOAT_CHANNEL_SHOW_CURVE: i32 = 53;
+
+    pub fn sequencer() -> Guid {
+        Guid::from_u32s(0x7B5AE74C, 0xD2704C10, 0xA9585798, 0x0B212A5A)
+    }
+    pub const SEQ_SERIALIZE_FLOAT_CHANNEL_COMPLETELY: i32 = 12;
 }

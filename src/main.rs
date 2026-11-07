@@ -22,6 +22,7 @@ OPTIONS:
         --imports           Print the import table
         --exports           Print the export table
         --nodes             Print graphs as numbered node listings instead of pseudocode
+        --animations        Print the keys of widget animations instead of one summary line each
         --no-other          Do not print objects that are not part of the main view
         --max-string <N>    Shorten strings longer than N characters (default 2000, 0 = no limit)
     -h, --help              Print help
@@ -56,6 +57,7 @@ fn parse_args() -> Result<Args, String> {
             "--exports" => a.opts.show_exports = true,
             "--no-other" => a.opts.show_other_objects = false,
             "--nodes" => a.opts.nodes = true,
+            "--animations" => a.opts.animations = true,
             "--max-string" => {
                 a.opts.max_string = it.next().ok_or("--max-string needs a value")?.parse().map_err(|_| "--max-string needs a number")?
             }
@@ -116,7 +118,7 @@ fn main() -> ExitCode {
         let text = match res {
             Ok(asset) => {
                 if args.json {
-                    asset.to_json(&f.display().to_string())
+                    asset.to_json_with(&f.display().to_string(), &args.opts)
                 } else {
                     asset.to_text(&args.opts)
                 }

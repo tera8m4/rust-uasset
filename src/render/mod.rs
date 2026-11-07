@@ -1,5 +1,6 @@
 //! LLM friendly text rendering.
 
+pub mod anim;
 pub mod blueprint;
 pub mod json;
 pub mod material;
@@ -28,11 +29,19 @@ pub struct Options {
     pub summary_only: bool,
     /// Print graphs as node listings instead of pseudocode.
     pub nodes: bool,
+    /// Print the keys of widget animations instead of one summary line per animation.
+    pub animations: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { verbose: false, show_other_objects: true, show_imports: false, show_exports: false, max_string: 2000, summary_only: false, nodes: false }
+        Self { verbose: false, show_other_objects: true, show_imports: false, show_exports: false, max_string: 2000, summary_only: false, nodes: false, animations: false }
+    }
+}
+
+impl Options {
+    pub fn show_animations(&self) -> bool {
+        self.animations || self.verbose
     }
 }
 

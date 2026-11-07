@@ -4,6 +4,7 @@
 pub mod ast;
 pub mod errors;
 pub mod graph;
+pub mod movie_scene;
 pub mod object;
 pub mod package;
 pub mod property;
@@ -45,7 +46,16 @@ impl Asset {
     }
 
     pub fn to_json(&self, file: &str) -> String {
-        render::json::render(&self.package, &self.objects, file)
+        self.to_json_with(file, &render::Options::default())
+    }
+
+    pub fn to_json_with(&self, file: &str, opts: &render::Options) -> String {
+        render::json::render_with(&self.package, &self.objects, file, opts)
+    }
+
+    /// Animations of a widget blueprint, empty for any other asset.
+    pub fn widget_animations(&self) -> Vec<movie_scene::WidgetAnimation> {
+        movie_scene::widget_animations(&self.package, &self.objects)
     }
 }
 

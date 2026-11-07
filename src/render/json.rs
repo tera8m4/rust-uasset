@@ -2,6 +2,8 @@
 
 use std::fmt::Write as _;
 
+use super::Options;
+use crate::movie_scene::{Bound, BoundKind, Channel, Ease, FrameRange, FrameRate, Key, Section, Track, WidgetAnimation};
 use crate::object::{Extra, Object};
 use crate::package::Package;
 use crate::property::{Property, Value};
@@ -214,7 +216,140 @@ impl J<'_> {
     }
 }
 
+fn opt_str(v: Option<&str>) -> String {
+    v.map(quote).unwrap_or_else(|| "null".into())
+}
+
+fn frame_json(rate: FrameRate, frame: i32) -> String {
+    format!("\"frame\":{},\"seconds\":{}", frame, num(rate.seconds(frame)))
+}
+
+fn bound_json(rate: FrameRate, b: Bound) -> String {
+    let kind = match b.kind {
+        BoundKind::Exclusive => "exclusive",
+        BoundKind::Inclusive => "inclusive",
+        BoundKind::Open => return "{\"type\":\"open\"}".into(),
+    };
+    format!("{{\"type\":{},{}}}", quote(kind), frame_json(rate, b.frame))
+}
+
+fn range_json(rate: FrameRate, r: Option<FrameRange>) -> String {
+    match r {
+        Some(r) => format!("{{\"lower\":{},\"upper\":{}}}", bound_json(rate, r.lower), bound_json(rate, r.upper)),
+        None => "null".into(),
+    }
+}
+
+fn rate_json(r: FrameRate) -> String {
+    format!("{{\"numerator\":{},\"denominator\":{}}}", r.numerator, r.denominator)
+}
+
+impl J<'_> {
+    fn key(&self, rate: FrameRate, k: &Key) -> String {
+        let mut s = format!("{{{},\"value\":{}", frame_json(rate, k.frame), self.value(&k.value));
+        if let Some(c) = &k.curve {
+            let _ = write!(
+                s,
+                ",\"interp\":{},\"tangentMode\":{},\"tangentWeightMode\":{},\"arriveTangent\":{},\"leaveTangent\":{},\"arriveTangentWeight\":{},\"leaveTangentWeight\":{}",
+                quote(&c.interp),
+                quote(&c.tangent_mode),
+                quote(&c.weight_mode),
+                num(c.arrive as f64),
+                num(c.leave as f64),
+                num(c.arrive_weight as f64),
+                num(c.leave_weight as f64)
+            );
+        }
+        s.push('}');
+        s
+    }
+
+    fn channel(&self, rate: FrameRate, c: &Channel) -> String {
+        let keys: Vec<String> = c.keys.iter().map(|k| self.key(rate, k)).collect();
+        format!(
+            "{{\"name\":{},\"type\":{},\"preInfinity\":{},\"postInfinity\":{},\"default\":{},\"enum\":{},\"keys\":[{}]}}",
+            quote(&c.name),
+            quote(&c.type_name),
+            opt_str(c.pre_infinity.as_deref()),
+            opt_str(c.post_infinity.as_deref()),
+            c.default.as_ref().map(|d| self.value(d)).unwrap_or_else(|| "null".into()),
+            opt_str(c.enum_name.as_deref()),
+            keys.join(",")
+        )
+    }
+
+    fn ease(&self, rate: FrameRate, e: Option<&Ease>) -> String {
+        match e {
+            Some(e) => format!("{{\"duration\":{},\"seconds\":{},\"function\":{}}}", e.duration, num(rate.seconds(e.duration)), opt_str(e.function.as_deref())),
+            None => "null".into(),
+        }
+    }
+
+    fn section(&self, rate: FrameRate, s: &Section) -> String {
+        let channels: Vec<String> = s.channels.iter().map(|c| self.channel(rate, c)).collect();
+        format!(
+            "{{\"class\":{},\"range\":{},\"easeIn\":{},\"easeOut\":{},\"channels\":[{}],\"properties\":{}}}",
+            quote(&s.class),
+            range_json(rate, s.range),
+            self.ease(rate, s.ease_in.as_ref()),
+            self.ease(rate, s.ease_out.as_ref()),
+            channels.join(","),
+            self.props(&s.extra_props)
+        )
+    }
+
+    fn track(&self, rate: FrameRate, t: &Track) -> String {
+        let sections: Vec<String> = t.sections.iter().map(|s| self.section(rate, s)).collect();
+        format!(
+            "{{\"class\":{},\"property\":{},\"displayName\":{},\"sections\":[{}]}}",
+            quote(&t.class),
+            opt_str(t.property_path.as_deref()),
+            opt_str(t.display_name.as_deref()),
+            sections.join(",")
+        )
+    }
+
+    fn animation(&self, a: &WidgetAnimation) -> String {
+        let scene = &a.scene;
+        let rate = scene.tick_resolution;
+        let tracks = |ts: &[Track]| ts.iter().map(|t| self.track(rate, t)).collect::<Vec<_>>().join(",");
+        let bindings: Vec<String> = scene
+            .bindings
+            .iter()
+            .map(|b| {
+                format!(
+                    "{{\"guid\":{},\"name\":{},\"slot\":{},\"isRoot\":{},\"class\":{},\"parent\":{},\"tracks\":[{}]}}",
+                    quote(&b.guid.to_string()),
+                    quote(&b.name),
+                    opt_str(b.slot.as_deref()),
+                    b.is_root,
+                    opt_str(b.class.as_deref()),
+                    b.parent.map(|p| quote(&p.to_string())).unwrap_or_else(|| "null".into()),
+                    tracks(&b.tracks)
+                )
+            })
+            .collect();
+        let marks: Vec<String> = scene.marked_frames.iter().map(|(f, l)| format!("{{{},\"label\":{}}}", frame_json(rate, *f), quote(l))).collect();
+        format!(
+            "{{\"name\":{},\"displayLabel\":{},\"tickResolution\":{},\"displayRate\":{},\"playbackRange\":{},\"durationSeconds\":{},\"markedFrames\":[{}],\"bindings\":[{}],\"tracks\":[{}]}}",
+            quote(&a.name),
+            opt_str(a.display_label.as_deref()),
+            rate_json(rate),
+            rate_json(scene.display_rate),
+            range_json(rate, scene.playback_range),
+            scene.duration().map(num).unwrap_or_else(|| "null".into()),
+            marks.join(","),
+            bindings.join(","),
+            tracks(&scene.tracks)
+        )
+    }
+}
+
 pub fn render(pkg: &Package, objs: &[Object], file: &str) -> String {
+    render_with(pkg, objs, file, &Options::default())
+}
+
+pub fn render_with(pkg: &Package, objs: &[Object], file: &str, opts: &Options) -> String {
     let j = J { pkg };
     let s = &pkg.summary;
     let mut out = String::from("{");
@@ -249,6 +384,10 @@ pub fn render(pkg: &Package, objs: &[Object], file: &str) -> String {
             })
             .collect();
         let _ = write!(out, "\"metadata\":{{{}}},", objs.join(","));
+    }
+    if opts.show_animations() {
+        let anims: Vec<String> = crate::movie_scene::widget_animations(pkg, objs).iter().map(|a| j.animation(a)).collect();
+        let _ = write!(out, "\"widgetAnimations\":[{}],", anims.join(","));
     }
     let exports: Vec<String> = objs.iter().map(|o| j.object(o)).collect();
     let _ = write!(out, "\"exports\":[{}]", exports.join(","));

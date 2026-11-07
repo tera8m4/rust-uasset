@@ -66,7 +66,8 @@ pub fn has_native_parser(name: &str) -> bool {
                 | "ColorMaterialInput" | "ScalarMaterialInput" | "ShadingModelMaterialInput"
                 | "SubstrateMaterialInput" | "VectorMaterialInput" | "Vector2MaterialInput" | "NavAgentSelector"
                 | "InstancedStruct" | "EdGraphPinType" | "NameCurveKey" | "StringCurveKey" | "FontCharacter"
-                | "DeprecateSlateVector2D"
+                | "DeprecateSlateVector2D" | "MovieSceneFrameRange" | "MovieSceneFloatChannel"
+                | "MovieSceneDoubleChannel"
         )
 }
 
@@ -352,6 +353,17 @@ pub fn read_native(pr: &PropReader, r: &mut Reader, name: &str, size: Option<usi
             sv(name, vec![("StructType", Value::Object(st)), ("Value", inner)])
         }
         "EdGraphPinType" => crate::graph::read_pin_type(pkg, n.r)?.to_value(),
+        "MovieSceneFrameRange" => crate::movie_scene::read_frame_range(n.r)?,
+        "MovieSceneFloatChannel" | "MovieSceneDoubleChannel" => {
+            let show_curve = pkg.custom_ver(custom::fortnite_main()) >= custom::FN_SERIALIZE_FLOAT_CHANNEL_SHOW_CURVE;
+            if !show_curve && pkg.custom_ver(custom::sequencer()) < custom::SEQ_SERIALIZE_FLOAT_CHANNEL_COMPLETELY {
+                return Ok(None);
+            }
+            match crate::movie_scene::read_curve_channel(n.r, name, name == "MovieSceneDoubleChannel", show_curve)? {
+                Some(v) => v,
+                None => return Ok(None),
+            }
+        }
         _ => return Ok(None),
     };
     let _ = size;

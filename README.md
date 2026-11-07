@@ -20,6 +20,7 @@ target/release/uasset [OPTIONS] <PATH>...
 | `--summary` | header, asset registry tags and dependencies only |
 | `--imports` / `--exports` | print the import / export tables |
 | `--nodes` | print graphs as numbered node listings instead of pseudocode |
+| `--animations` | print the keys of widget animations instead of one summary line each (implied by `-v`) |
 | `--no-other` | hide objects that are not part of the main view |
 | `--max-string <N>` | shorten long strings (default 2000, 0 = unlimited) |
 
@@ -55,6 +56,18 @@ target/release/uasset [OPTIONS] <PATH>...
   math library calls become operators. Overrides that only call `super` are omitted (listed in a
   comment). Anim graphs print the pose pipeline as `let` statements; state machines list states,
   aliases and transitions with their rule expressions. `--nodes` prints the raw node listing instead.
+- **Widget animations**: one line per animation by default (duration, number of bindings, tracks and
+  channels). `--animations` prints every animated widget, track and channel with its keys in seconds,
+  and adds a `widgetAnimations` key to the JSON output:
+
+  ```
+  #### Intro: 0.5s, frames 0..15 @ 30 fps (tick 60000/s)
+  Icon (Image):
+    RenderOpacity (FloatTrack):
+      FloatCurve: 0s=0.0 linear, 0.5s=1.0 cubic
+  ```
+  Tangents (value per tick) are shown for user and broken tangents or weighted keys; `-v` shows them
+  for every key, plus raw ticks. Curves are reported as stored, not sampled.
 - **Materials / material functions**: settings, comments, parameters and HLSL-like code for every
   connected output (`BaseColor = lerp(...)`); shared expressions become `let`s and expressions not
   connected to any output are listed.
@@ -72,6 +85,8 @@ println!("{}", asset.to_text(&rust_uasset::render::Options::default()));
 
 `asset.package` holds the summary, names, imports and exports; `asset.objects` the decoded
 properties and native data (DataTable rows, graph pins, struct fields, ...) of every export.
+`asset.widget_animations()` returns the animations of a widget blueprint as bindings, tracks, sections,
+channels and keys.
 
 ## Limitations
 
