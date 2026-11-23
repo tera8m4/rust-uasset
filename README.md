@@ -57,17 +57,19 @@ target/release/uasset [OPTIONS] <PATH>...
   comment). Anim graphs print the pose pipeline as `let` statements; state machines list states,
   aliases and transitions with their rule expressions. `--nodes` prints the raw node listing instead.
 - **Widget animations**: one line per animation by default (duration, number of bindings, tracks and
-  channels). `--animations` prints every animated widget, track and channel with its keys in seconds,
-  and adds a `widgetAnimations` key to the JSON output:
+  channels). `--animations` prints every animated widget, track and channel with its keys in seconds
+  and display-rate frames, and adds a `widgetAnimations` key to the JSON output:
 
   ```
   #### Intro: 0.5s, frames 0..15 @ 30 fps (tick 60000/s)
   Icon (Image):
     RenderOpacity (FloatTrack):
-      FloatCurve: 0s=0.0 linear, 0.5s=1.0 cubic
+      FloatCurve: 0s[f0]=0.0 linear, 0.5s[f15]=1.0 cubic
   ```
   Tangents (value per tick) are shown for user and broken tangents or weighted keys; `-v` shows them
-  for every key, plus raw ticks. Curves are reported as stored, not sampled.
+  for every key, plus raw ticks. Curves are reported as stored, not sampled. A section without a stored
+  range uses its class default (`[0s, 0s]` for property sections, open for event sections); keys
+  outside a section's range are never reached and are flagged with `!!`.
 - **Materials / material functions**: settings, comments, parameters and HLSL-like code for every
   connected output (`BaseColor = lerp(...)`); shared expressions become `let`s and expressions not
   connected to any output are listed.
