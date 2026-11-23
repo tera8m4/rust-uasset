@@ -68,7 +68,8 @@ target/release/uasset [OPTIONS] <PATH>...
   ```
   Tangents (value per tick) are shown for user and broken tangents or weighted keys; `-v` shows them
   for every key, plus raw ticks. Curves are reported as stored, not sampled. A section without a stored
-  range uses its class default (`[0s, 0s]` for property sections, open for event sections); keys
+  range uses its class default (`[0s, 0s]` for most sections, open for the event trigger, bool,
+  visibility, fade and other sections whose constructor sets an infinite range); keys
   outside a section's range are never reached and are flagged with `!!`. When the compiled copy of the animations
   in the generated class differs from the saved blueprint (the blueprint was changed but not recompiled),
   a `!!` warning lists the affected tracks; JSON reports it as `compiledAnimationDifferences`.

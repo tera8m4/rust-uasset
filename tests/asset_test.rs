@@ -376,8 +376,8 @@ fn instanced_struct_layouts() {
     }
 }
 
-/// A section without a stored SectionRange uses the class default: [0, 0] for property sections,
-/// infinite for event sections. Keys outside the range are never reached.
+/// A section without a stored SectionRange uses the class default: [0, 0] for most sections, infinite for
+/// those whose constructor says so (event trigger, bool, ...). Keys outside the range are never reached.
 #[test]
 fn section_default_range() {
     use movie_scene::{Channel, Key, Section};
@@ -406,6 +406,8 @@ fn section_default_range() {
     let event = section("MovieSceneEventTriggerSection");
     assert_eq!(event.effective_range(), movie_scene::FrameRange::ALL);
     assert_eq!(event.keys_outside_range(), 0);
+    assert_eq!(section("MovieSceneBoolSection").effective_range(), movie_scene::FrameRange::ALL);
+    assert_eq!(section("MovieSceneEventRepeaterSection").keys_outside_range(), 1);
 }
 
 /// The blueprint's animations are compared with the compiled copies in the generated class.

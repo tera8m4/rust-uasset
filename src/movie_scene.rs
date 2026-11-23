@@ -288,11 +288,23 @@ pub struct Section {
     pub extra_props: Vec<Property>,
 }
 
+/// Section classes whose constructor calls `SetRange(TRange<FFrameNumber>::All())` (UE 5.8). Event repeater
+/// sections are not among them and keep the [0, 0] default.
+const INFINITE_RANGE_SECTIONS: &[&str] = &[
+    "MovieSceneBoolSection", "MovieSceneSpawnSection", "MovieSceneVisibilitySection", "MovieSceneEventSection",
+    "MovieSceneEventTriggerSection", "MovieSceneFadeSection", "MovieSceneSlomoSection",
+    "MovieSceneObjectPropertySection", "MovieSceneParticleSection", "MovieScenePrimitiveMaterialSection",
+    "MovieSceneCVarSection", "MovieSceneTimeWarpSection", "MovieSceneGameplayCueTriggerSection",
+    "MovieSceneComposureExportSection", "MovieSceneAnimBusSection", "MovieSceneAnimMixerLayerWeightSection",
+    "MovieSceneRootMotionSection",
+];
+
 impl Section {
     /// The range the section is evaluated in: the stored one, or the class default when it is not stored.
-    /// UMovieSceneSection defaults to the single frame [0, 0]; event sections default to an infinite range.
+    /// UMovieSceneSection defaults to the single frame [0, 0]; the classes in `INFINITE_RANGE_SECTIONS`
+    /// set an infinite range in their constructors.
     pub fn effective_range(&self) -> FrameRange {
-        self.range.unwrap_or(if self.class.contains("Event") {
+        self.range.unwrap_or(if INFINITE_RANGE_SECTIONS.contains(&self.class.as_str()) {
             FrameRange::ALL
         } else {
             let zero = Bound { kind: BoundKind::Inclusive, frame: 0 };
