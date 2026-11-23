@@ -197,6 +197,86 @@ impl Expr {
         s
     }
 
+    /// Like `to_code`, but calls, structs and lists that would make a line longer than `WRAP_WIDTH`
+    /// put one argument per line. `col` is the column where the expression starts; continuation
+    /// lines are indented relative to the start of the line.
+    pub fn to_code_at(&self, col: usize) -> String {
+        let mut s = String::new();
+        self.write_wrapped(&mut s, 0, col, 0);
+        s
+    }
+
+    fn write_wrapped(&self, out: &mut String, parent_prec: u8, first_col: usize, level: usize) {
+        let mut flat = String::new();
+        self.write(&mut flat, parent_prec);
+        let col = match out.rfind('\n') {
+            Some(i) => out[i + 1..].chars().count(),
+            None => first_col + out.chars().count(),
+        };
+        if col + flat.chars().count() <= WRAP_WIDTH {
+            out.push_str(&flat);
+            return;
+        }
+        let items = |out: &mut String, items: Vec<(&str, &Expr)>, close: char| {
+            for (n, e) in items {
+                out.push('\n');
+                out.push_str(&"    ".repeat(level + 1));
+                if !n.is_empty() {
+                    out.push_str(&ident(n));
+                    out.push_str(": ");
+                }
+                e.write_wrapped(out, 0, first_col, level + 1);
+                out.push(',');
+            }
+            out.push('\n');
+            out.push_str(&"    ".repeat(level));
+            out.push(close);
+        };
+        match self {
+            Expr::Call { target, func, args } if !args.is_empty() => {
+                if let Some(t) = target {
+                    t.write_wrapped(out, 12, first_col, level);
+                    out.push('.');
+                }
+                out.push_str(func);
+                out.push('(');
+                items(out, args.iter().map(|(n, e)| (n.as_str(), e)).collect(), ')');
+            }
+            Expr::Struct(t, fields) if !fields.is_empty() => {
+                out.push_str(t);
+                out.push('{');
+                items(out, fields.iter().map(|(n, e)| (n.as_str(), e)).collect(), '}');
+            }
+            Expr::List(v) if !v.is_empty() => {
+                out.push('[');
+                items(out, v.iter().map(|e| ("", e)).collect(), ']');
+            }
+            Expr::Binary(op, a, b) => {
+                let p = prec(op);
+                if p < parent_prec {
+                    out.push('(');
+                }
+                a.write_wrapped(out, p, first_col, level);
+                let _ = write!(out, " {op} ");
+                b.write_wrapped(out, p + 1, first_col, level);
+                if p < parent_prec {
+                    out.push(')');
+                }
+            }
+            Expr::Member(o, m) => {
+                o.write_wrapped(out, 12, first_col, level);
+                out.push('.');
+                out.push_str(&ident(m));
+            }
+            Expr::Cast(t, e) => {
+                let _ = write!(out, "cast<{t}>(");
+                e.write_wrapped(out, 0, first_col, level);
+                out.push(')');
+            }
+            _ => out.push_str(&flat),
+        }
+    }
+
     /// Number of nodes (used to decide inlining).
     pub fn size(&self) -> usize {
         match self {
@@ -234,6 +314,9 @@ pub fn ident(name: &str) -> String {
     if s.is_empty() { "_".into() } else { s }
 }
 
+/// Line width at which the pseudocode printer wraps long expressions.
+pub const WRAP_WIDTH: usize = 120;
+
 pub struct Printer {
     pub out: String,
     pub indent: usize,
@@ -245,11 +328,13 @@ impl Printer {
     }
 
     fn line(&mut self, s: &str) {
-        for _ in 0..self.indent {
-            self.out.push_str("    ");
+        for l in s.split('\n') {
+            for _ in 0..self.indent {
+                self.out.push_str("    ");
+            }
+            self.out.push_str(l);
+            self.out.push('\n');
         }
-        self.out.push_str(s);
-        self.out.push('\n');
     }
 
     fn block(&mut self, head: &str, body: &[Stmt]) {
@@ -287,19 +372,24 @@ impl Printer {
         self.line("}");
     }
 
+    /// `prefix` followed by `e`, wrapped when too long.
+    fn code(&self, prefix: &str, e: &Expr) -> String {
+        format!("{prefix}{}", e.to_code_at(self.indent * 4 + prefix.chars().count()))
+    }
+
     pub fn stmt(&mut self, s: &Stmt) {
         match s {
-            Stmt::Expr(e) => self.line(&e.to_code()),
+            Stmt::Expr(e) => self.line(&self.code("", e)),
             Stmt::Let(names, e) => {
                 let names: Vec<String> = names.iter().map(|n| ident(n)).collect();
-                self.line(&format!("let {} = {}", names.join(", "), e.to_code()))
+                self.line(&self.code(&format!("let {} = ", names.join(", ")), e))
             }
-            Stmt::Assign(a, b) => self.line(&format!("{} = {}", a.to_code(), b.to_code())),
+            Stmt::Assign(a, b) => self.line(&self.code(&format!("{} = ", a.to_code()), b)),
             Stmt::If { cond, then, els } if then.is_empty() && els.is_empty() => {
                 self.line(&format!("if ({}) {{}}", cond.to_code()));
             }
             Stmt::If { cond, then, els } => {
-                self.block(&format!("if ({})", cond.to_code()), then);
+                self.block(&format!("{})", self.code("if (", cond)), then);
                 self.else_chain(els);
             }
             Stmt::IfLet { name, value, then, els } => {
@@ -347,12 +437,12 @@ impl Printer {
                 self.indent -= 1;
                 self.line("}");
             }
-            Stmt::Await(e) => self.line(&format!("await {}", e.to_code())),
+            Stmt::Await(e) => self.line(&self.code("await ", e)),
             Stmt::Return(v) => {
                 if v.is_empty() {
                     self.line("return");
                 } else if v.len() == 1 && v[0].0 == "ReturnValue" {
-                    self.line(&format!("return {}", v[0].1.to_code()));
+                    self.line(&self.code("return ", &v[0].1));
                 } else {
                     let parts: Vec<String> = v.iter().map(|(n, e)| format!("{}: {}", ident(n), e.to_code())).collect();
                     self.line(&format!("return ({})", parts.join(", ")));
@@ -478,5 +568,22 @@ mod tests {
         );
         assert_eq!(e.to_code(), "(a + b) * c");
         assert_eq!(ident("Array Element"), "ArrayElement");
+    }
+
+    #[test]
+    fn wrapping() {
+        let long = |n: &str| Expr::var(format!("{n}{}", "x".repeat(40)));
+        let inner = Expr::call("Inner", vec![("A".into(), long("a")), ("B".into(), long("b"))]);
+        let e = Expr::call("Outer", vec![("Value".into(), inner), ("".into(), Expr::lit("1"))]);
+        let mut p = Printer::new(1);
+        p.stmt(&Stmt::Let(vec!["v".into()], e));
+        let a = format!("a{}", "x".repeat(40));
+        let b = format!("b{}", "x".repeat(40));
+        let expected = format!(
+            "    let v = Outer(\n        Value: Inner(A: {a}, B: {b}),\n        1,\n    )\n"
+        );
+        assert_eq!(p.out, expected);
+        let short = Expr::call("F", vec![("A".into(), Expr::lit("1"))]);
+        assert_eq!(short.to_code_at(0), "F(A: 1)");
     }
 }
