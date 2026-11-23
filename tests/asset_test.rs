@@ -352,3 +352,26 @@ fn local_asset_dir() {
     }
     assert!(count > 0, "no assets in {dir}");
 }
+
+/// FInstancedStruct with and without the pre-custom-version u8 header:
+/// struct type, serial size 8, body = "None" (empty tagged struct).
+#[test]
+fn instanced_struct_layouts() {
+    use rust_uasset::property::PropReader;
+    let asset = Asset::open(&test_data_path("WBP_AnimTest.uasset")).unwrap();
+    let pkg = &asset.package;
+    let none = pkg.names.iter().position(|n| n == "None").unwrap() as i32;
+    let mut body = vec![];
+    body.extend((-1i32).to_le_bytes());
+    body.extend(8i32.to_le_bytes());
+    body.extend(none.to_le_bytes());
+    body.extend(0i32.to_le_bytes());
+    for prefix in [vec![], vec![0u8]] {
+        let bytes = [prefix.clone(), body.clone()].concat();
+        let mut r = Reader::new(&bytes);
+        let v = PropReader::new(pkg).read_struct(&mut r, "InstancedStruct", Some(bytes.len()), Some(true), 0).unwrap();
+        assert_eq!(r.pos(), bytes.len(), "prefix {prefix:?}");
+        assert!(matches!(field(&v, "StructType"), Value::Object(-1)));
+        assert!(matches!(field(&v, "Value"), Value::Struct(s) if s.fields.is_empty()), "{v:?}");
+    }
+}

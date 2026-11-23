@@ -332,24 +332,51 @@ pub fn read_native(pr: &PropReader, r: &mut Reader, name: &str, size: Option<usi
             sv(name, f)
         }
         "InstancedStruct" => {
-            let _version = n.r.u8()?;
-            let st = n.r.i32()?;
-            let serial = n.r.i32()?;
-            if serial < 0 || serial as usize > n.r.remaining() {
-                return Ok(None);
-            }
-            let sname = pkg.obj_name(st);
-            let start = n.r.pos();
-            let inner = if serial == 0 {
-                Value::Optional(None)
-            } else {
-                let mut sub = n.r.clone();
-                match pr.read_struct(&mut sub, &sname, Some(serial as usize), None, depth + 1) {
-                    Ok(v) if sub.pos() == start + serial as usize => v,
-                    _ => Value::Raw { type_name: sname.clone(), bytes: n.r.data()[start..start + serial as usize].to_vec(), note: "instanced struct".into() },
-                }
+            // Packages saved before FInstancedStructCustomVersion::CustomVersionAdded start with a u8 version.
+            // The custom version is not always present, so try both layouts and keep the one that decodes exactly.
+            let base = n.r.pos();
+            let valid_index = |i: i32| {
+                i == 0 || (i < 0 && ((-i - 1) as usize) < pkg.imports.len()) || (i > 0 && ((i - 1) as usize) < pkg.exports.len())
             };
-            n.r.seek(start + serial as usize)?;
+            let mut fallback = None;
+            for skip in [0, 1] {
+                n.r.seek(base)?;
+                if skip == 1 {
+                    n.r.u8()?;
+                }
+                let (Ok(st), Ok(serial)) = (n.r.i32(), n.r.i32()) else { continue };
+                if !valid_index(st) || serial < 0 || serial as usize > n.r.remaining() {
+                    continue;
+                }
+                let start = n.r.pos();
+                let end = start + serial as usize;
+                let sname = pkg.obj_name(st);
+                let inner = if serial == 0 {
+                    Some(Value::Optional(None))
+                } else {
+                    let mut sub = n.r.clone();
+                    match pr.read_struct(&mut sub, &sname, Some(serial as usize), None, depth + 1) {
+                        Ok(v) if sub.pos() == end => Some(v),
+                        _ => None,
+                    }
+                };
+                match inner {
+                    Some(v) => {
+                        fallback = Some((st, end, v));
+                        break;
+                    }
+                    None if fallback.is_none() => {
+                        let raw = Value::Raw { type_name: sname, bytes: n.r.data()[start..end].to_vec(), note: "instanced struct".into() };
+                        fallback = Some((st, end, raw));
+                    }
+                    None => {}
+                }
+            }
+            let Some((st, end, inner)) = fallback else {
+                n.r.seek(base)?;
+                return Ok(None);
+            };
+            n.r.seek(end)?;
             sv(name, vec![("StructType", Value::Object(st)), ("Value", inner)])
         }
         "EdGraphPinType" => crate::graph::read_pin_type(pkg, n.r)?.to_value(),

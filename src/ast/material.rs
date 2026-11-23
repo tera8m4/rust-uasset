@@ -181,14 +181,14 @@ impl<'a, 'c> MatBuilder<'a, 'c> {
         self.building.remove(&e);
         let shared = self.uses.get(&e).copied().unwrap_or(0) > 1;
         let is_simple = matches!(ex, Expr::Var(_) | Expr::Lit(_));
-        if (shared && !is_simple) || ex.size() > 14 {
+        // Custom nodes always get a variable so their HLSL can be printed next to it.
+        let custom = o.class == "MaterialExpressionCustom";
+        if (shared && !is_simple) || ex.size() > 14 || custom {
             let base = self.name_hint(o);
             let name = self.fresh(&base);
-            if o.class == "MaterialExpressionCustom" {
+            if custom {
                 if let Some(Value::Str(code)) = o.prop("Code") {
-                    let code = code.replace('\r', "");
-                    let shown: Vec<&str> = code.lines().take(40).collect();
-                    self.body.push(Stmt::Comment(format!("custom HLSL:\n{}", shown.join("\n"))));
+                    self.body.push(Stmt::Comment(format!("custom HLSL:\n{}", self.custom_code(code))));
                 }
             }
             self.body.push(Stmt::Let(vec![name.clone()], ex));
@@ -394,6 +394,18 @@ impl<'a, 'c> MatBuilder<'a, 'c> {
 }
 
 impl MatBuilder<'_, '_> {
+    /// HLSL of a Custom node, shortened only by `--max-string`.
+    fn custom_code(&self, code: &str) -> String {
+        let code = code.replace('\r', "");
+        let max = self.c.opts.max_string;
+        let total = code.chars().count();
+        if max == 0 || total <= max {
+            return code;
+        }
+        let cut: String = code.chars().take(max).collect();
+        format!("{cut}\n...<{} more chars, use --max-string 0 for all>", total - max)
+    }
+
     /// Expressions referenced while building the outputs.
     fn reachable(&self) -> HashSet<i32> {
         let mut seen = HashSet::new();
