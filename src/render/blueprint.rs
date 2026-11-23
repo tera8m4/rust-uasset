@@ -91,6 +91,7 @@ pub fn node_title(c: &Ctx, n: &Object) -> String {
             format!("Event {name}")
         }
         "K2Node_CustomEvent" => format!("Custom Event {}", s("CustomFunctionName")),
+        "K2Node_WidgetAnimationEvent" => format!("On {}", crate::ast::bp::widget_animation_event(n)),
         "K2Node_ComponentBoundEvent" => format!("On {} ({})", s("DelegatePropertyName"), s("ComponentPropertyName")),
         "K2Node_ActorBoundEvent" => format!("On {} ({})", s("DelegatePropertyName"), obj("EventOwner")),
         "K2Node_InputAction" => format!("InputAction {}", s("InputActionName")),
