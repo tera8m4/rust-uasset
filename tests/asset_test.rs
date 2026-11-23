@@ -407,3 +407,20 @@ fn section_default_range() {
     assert_eq!(event.effective_range(), movie_scene::FrameRange::ALL);
     assert_eq!(event.keys_outside_range(), 0);
 }
+
+/// The blueprint's animations are compared with the compiled copies in the generated class.
+#[test]
+fn compiled_animation_differences() {
+    let asset = Asset::open(&test_data_path("WBP_AnimTest.uasset")).unwrap();
+    let (pkg, objs) = (&asset.package, &asset.objects);
+    assert!(movie_scene::widget_animation_differences(pkg, objs).is_empty());
+
+    let saved = asset.widget_animations();
+    let mut compiled = saved.clone();
+    let fader = compiled[0].scene.bindings.iter_mut().find(|b| b.name == "Fader").unwrap();
+    let opacity = fader.tracks.iter_mut().find(|t| t.class == "MovieSceneFloatTrack").unwrap();
+    opacity.sections[0].channels[0].keys[1].value = Value::Float(0.5);
+    assert_eq!(movie_scene::compiled_differences(pkg, &saved, &compiled), ["SwitchImages: Fader.RenderOpacity"]);
+    assert_eq!(movie_scene::compiled_differences(pkg, &saved, &[]), ["SwitchImages: missing from the compiled class"]);
+    assert_eq!(movie_scene::compiled_differences(pkg, &[], &saved), ["SwitchImages: only in the compiled class"]);
+}

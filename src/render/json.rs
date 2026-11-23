@@ -390,6 +390,8 @@ pub fn render_with(pkg: &Package, objs: &[Object], file: &str, opts: &Options) -
     if opts.show_animations() {
         let anims: Vec<String> = crate::movie_scene::widget_animations(pkg, objs).iter().map(|a| j.animation(a)).collect();
         let _ = write!(out, "\"widgetAnimations\":[{}],", anims.join(","));
+        let stale: Vec<String> = crate::movie_scene::widget_animation_differences(pkg, objs).iter().map(|d| quote(d)).collect();
+        let _ = write!(out, "\"compiledAnimationDifferences\":[{}],", stale.join(","));
     }
     let exports: Vec<String> = objs.iter().map(|o| j.object(o)).collect();
     let _ = write!(out, "\"exports\":[{}]", exports.join(","));

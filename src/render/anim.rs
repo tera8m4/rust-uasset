@@ -53,6 +53,13 @@ pub fn write_animations(c: &Ctx, out: &mut Out, anims: &[WidgetAnimation]) {
         return;
     }
     out.blank();
+    let stale = crate::movie_scene::widget_animation_differences(c.pkg, c.objs);
+    if !stale.is_empty() {
+        out.line(0, "!! The compiled class has different animation data than the saved blueprint; the game plays the compiled copy. Recompile and save:");
+        for d in &stale {
+            out.line(0, format!("!!   {d}"));
+        }
+    }
     if !c.opts.show_animations() {
         out.line(0, format!("### Widget animations ({}, keys shown with --animations)", anims.len()));
         for a in anims {

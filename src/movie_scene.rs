@@ -652,3 +652,86 @@ pub fn widget_animations(pkg: &Package, objs: &[Object]) -> Vec<WidgetAnimation>
     let Some(owner) = owner else { return vec![] };
     animation_exports(owner).into_iter().filter_map(|i| read_widget_animation(pkg, objs, i)).collect()
 }
+
+/// Comparable text of a value; objects by name, since the compiled copy has its own subobjects.
+fn value_key(pkg: &Package, v: &Value) -> String {
+    let list = |vs: &mut dyn Iterator<Item = String>| vs.collect::<Vec<_>>().join(",");
+    match v {
+        Value::Object(i) => pkg.obj_name(*i),
+        Value::Struct(s) => {
+            format!("{}{{{}}}", s.type_name, list(&mut s.fields.iter().map(|f| format!("{}={}", f.name, value_key(pkg, &f.value)))))
+        }
+        Value::Array(a) | Value::Set(a) => format!("[{}]", list(&mut a.iter().map(|x| value_key(pkg, x)))),
+        Value::Map(m) => format!("{{{}}}", list(&mut m.iter().map(|(k, x)| format!("{}:{}", value_key(pkg, k), value_key(pkg, x))))),
+        Value::Optional(Some(x)) => value_key(pkg, x),
+        Value::Delegate { object, function } => format!("{}.{function}", pkg.obj_name(*object)),
+        Value::MulticastDelegate(d) => list(&mut d.iter().map(|(o, f)| format!("{}.{f}", pkg.obj_name(*o)))),
+        Value::FieldPath { path, owner } => format!("{}:{}", pkg.obj_name(*owner), path.join(".")),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Track label and comparable content of every track of an animation.
+fn track_keys(pkg: &Package, a: &WidgetAnimation) -> Vec<(String, String)> {
+    let s = &a.scene;
+    let mut out = vec![("playback".to_string(), format!("{:?} {:?} {:?}", s.playback_range, s.tick_resolution, s.display_rate))];
+    let tracks = s.bindings.iter().flat_map(|b| b.tracks.iter().map(move |t| (b.name.as_str(), t))).chain(s.tracks.iter().map(|t| ("", t)));
+    for (binding, t) in tracks {
+        let mut content = t.class.clone();
+        for sec in &t.sections {
+            content.push_str(&format!("|{} {:?} {:?} {:?}", sec.class, sec.effective_range(), sec.ease_in, sec.ease_out));
+            for ch in &sec.channels {
+                let default = ch.default.as_ref().map(|d| value_key(pkg, d)).unwrap_or_default();
+                content.push_str(&format!(";{} {default}", ch.name));
+                for k in &ch.keys {
+                    content.push_str(&format!(" {}={}{:?}", k.frame, value_key(pkg, &k.value), k.curve));
+                }
+            }
+        }
+        let label = if binding.is_empty() { t.title() } else { format!("{binding}.{}", t.title()) };
+        out.push((label, content));
+    }
+    out
+}
+
+/// Differences between the blueprint's animations and the compiled copies in its generated class,
+/// one line per animation that differs. A stale compiled copy means the game plays other data than
+/// the editor shows.
+pub fn compiled_differences(pkg: &Package, saved: &[WidgetAnimation], compiled: &[WidgetAnimation]) -> Vec<String> {
+    let mut out = vec![];
+    for a in saved {
+        let Some(c) = compiled.iter().find(|c| c.name == a.name) else {
+            out.push(format!("{}: missing from the compiled class", a.name));
+            continue;
+        };
+        let (ours, theirs) = (track_keys(pkg, a), track_keys(pkg, c));
+        let mut differ: Vec<String> = vec![];
+        for (label, content) in &ours {
+            if !theirs.iter().any(|(l, x)| l == label && x == content) {
+                differ.push(label.clone());
+            }
+        }
+        for (label, _) in &theirs {
+            if !ours.iter().any(|(l, _)| l == label) {
+                differ.push(format!("{label} (compiled only)"));
+            }
+        }
+        differ.dedup();
+        if !differ.is_empty() {
+            out.push(format!("{}: {}", a.name, differ.join(", ")));
+        }
+    }
+    for c in compiled.iter().filter(|c| !saved.iter().any(|a| a.name == c.name)) {
+        out.push(format!("{}: only in the compiled class", c.name));
+    }
+    out
+}
+
+/// `compiled_differences` for a package: the blueprint's animations against its generated class.
+/// Empty when the package has no blueprint animations or no generated class export.
+pub fn widget_animation_differences(pkg: &Package, objs: &[Object]) -> Vec<String> {
+    let Some(bp) = objs.iter().find(|o| !o.class.ends_with("GeneratedClass") && !animation_exports(o).is_empty()) else { return vec![] };
+    let Some(class) = objs.iter().find(|o| o.class.ends_with("GeneratedClass")) else { return vec![] };
+    let read = |o: &Object| animation_exports(o).into_iter().filter_map(|i| read_widget_animation(pkg, objs, i)).collect::<Vec<_>>();
+    compiled_differences(pkg, &read(bp), &read(class))
+}
