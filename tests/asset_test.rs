@@ -424,3 +424,136 @@ fn compiled_animation_differences() {
     assert_eq!(movie_scene::compiled_differences(pkg, &saved, &[]), ["SwitchImages: missing from the compiled class"]);
     assert_eq!(movie_scene::compiled_differences(pkg, &[], &saved), ["SwitchImages: only in the compiled class"]);
 }
+
+fn fstring(s: &str) -> Vec<u8> {
+    let mut b = ((s.len() + 1) as i32).to_le_bytes().to_vec();
+    b.extend(s.as_bytes());
+    b.push(0);
+    b
+}
+
+/// Package for hand-built struct data, with the given custom versions overridden.
+fn test_package(versions: &[(rust_uasset::reader::Guid, Option<i32>)]) -> rust_uasset::package::Package {
+    let mut pkg = Asset::open(&test_data_path("WBP_AnimTest.uasset")).unwrap().package;
+    for (g, v) in versions {
+        pkg.set_custom_ver(*g, *v);
+    }
+    pkg
+}
+
+fn none_name(pkg: &rust_uasset::package::Package) -> Vec<u8> {
+    let none = pkg.names.iter().position(|n| n == "None").unwrap() as i32;
+    [none.to_le_bytes(), 0i32.to_le_bytes()].concat()
+}
+
+fn read_native_struct(pkg: &rust_uasset::package::Package, name: &str, bytes: &[u8]) -> Value {
+    let mut r = Reader::new(bytes);
+    let v = rust_uasset::property::PropReader::new(pkg).read_struct(&mut r, name, Some(bytes.len()), Some(true), 0).unwrap();
+    assert_eq!(r.pos(), bytes.len(), "{name}: {v:?}");
+    v
+}
+
+/// FFontData::Serialize: bIsCooked, then tagged properties (editor data) or the compact cooked layout.
+#[test]
+fn font_data_native() {
+    use rust_uasset::versions::custom;
+    let pkg = test_package(&[(custom::editor(), Some(custom::ED_ADDED_FONT_FACE_ASSETS))]);
+    let v = read_native_struct(&pkg, "FontData", &[0u32.to_le_bytes().to_vec(), none_name(&pkg)].concat());
+    assert!(matches!(&v, Value::Struct(s) if s.fields.is_empty() && !s.native), "{v:?}");
+
+    let bytes = [1u32.to_le_bytes(), (-2i32).to_le_bytes(), 3i32.to_le_bytes()].concat();
+    let v = read_native_struct(&pkg, "FontData", &bytes);
+    assert!(matches!(field(&v, "FontFaceAsset"), Value::Object(-2)));
+    assert!(matches!(field(&v, "SubFaceIndex"), Value::Int(3)));
+    assert!(v.as_struct().unwrap().get("FontFilename").is_none());
+
+    let bytes = [1u32.to_le_bytes().to_vec(), 0i32.to_le_bytes().to_vec(), fstring("a.ttf"), vec![1, 2], 0i32.to_le_bytes().to_vec()].concat();
+    let v = read_native_struct(&pkg, "FontData", &bytes);
+    assert!(matches!(field(&v, "FontFilename"), Value::Str(s) if s == "a.ttf"));
+    assert!(matches!(field(&v, "Hinting"), Value::UInt(1)));
+    assert!(matches!(field(&v, "LoadingPolicy"), Value::UInt(2)));
+
+    // Before AddedFontFaceAssets: plain tagged properties.
+    let old = test_package(&[(custom::editor(), Some(custom::ED_ADDED_FONT_FACE_ASSETS - 1))]);
+    let v = read_native_struct(&old, "FontData", &none_name(&old));
+    assert!(matches!(&v, Value::Struct(s) if s.fields.is_empty()), "{v:?}");
+}
+
+/// FMaterialOverrideNanite::Serialize: legacy native fields, or bSerializeAsCookedData (+ material) followed by
+/// tagged properties.
+#[test]
+fn material_override_nanite_native() {
+    use rust_uasset::versions::custom;
+    let pkg = test_package(&[(custom::fortnite_release(), Some(custom::FNR_NANITE_MATERIAL_OVERRIDE_USES_EDITOR_ONLY))]);
+    let v = read_native_struct(&pkg, "MaterialOverrideNanite", &[0u32.to_le_bytes().to_vec(), none_name(&pkg)].concat());
+    assert!(matches!(&v, Value::Struct(s) if s.fields.is_empty()), "{v:?}");
+    let bytes = [1u32.to_le_bytes().to_vec(), (-1i32).to_le_bytes().to_vec(), none_name(&pkg)].concat();
+    let v = read_native_struct(&pkg, "MaterialOverrideNanite", &bytes);
+    assert!(matches!(field(&v, "OverrideMaterial"), Value::Object(-1)));
+
+    let mut old = test_package(&[(custom::fortnite_release(), None)]);
+    old.soft_object_paths = vec!["/Game/M.M".into()];
+    let bytes = [0i32.to_le_bytes(), 1u32.to_le_bytes(), (-3i32).to_le_bytes()].concat();
+    let v = read_native_struct(&old, "MaterialOverrideNanite", &bytes);
+    assert!(matches!(field(&v, "OverrideMaterialRef"), Value::SoftObject(s) if s == "/Game/M.M"));
+    assert!(matches!(field(&v, "bEnableOverride"), Value::Bool(true)));
+    assert!(matches!(field(&v, "OverrideMaterial"), Value::Object(-3)));
+}
+
+/// With FInstancedStructCustomVersion there is no version byte; without it an optional 0xABABABAB header
+/// precedes the version byte.
+#[test]
+fn instanced_struct_custom_version() {
+    use rust_uasset::versions::custom;
+    let pkg = test_package(&[(custom::instanced_struct(), Some(custom::IS_CUSTOM_VERSION_ADDED))]);
+    let body = [(-1i32).to_le_bytes().to_vec(), 8i32.to_le_bytes().to_vec(), none_name(&pkg)].concat();
+    let v = read_native_struct(&pkg, "InstancedStruct", &body);
+    assert!(matches!(field(&v, "Value"), Value::Struct(s) if s.fields.is_empty()), "{v:?}");
+    // A version byte is not expected when the custom version is present.
+    let v = read_native_struct(&pkg, "InstancedStruct", &[vec![0u8], body.clone()].concat());
+    assert!(matches!(v, Value::Raw { .. }), "{v:?}");
+
+    let legacy = test_package(&[(custom::instanced_struct(), None)]);
+    let v = read_native_struct(&legacy, "InstancedStruct", &[vec![0xAB; 4], vec![0u8], body].concat());
+    assert!(matches!(field(&v, "StructType"), Value::Object(-1)), "{v:?}");
+}
+
+/// UInterchangeBaseNode serializes only its FAttributeStorage (no tagged properties).
+#[test]
+fn interchange_attribute_storage() {
+    use rust_uasset::versions::custom;
+    let storage: Vec<u8> = [
+        1.5f32.to_le_bytes().to_vec(),
+        "hi\0".encode_utf16().flat_map(|c| c.to_le_bytes()).collect(),
+        [1.0f32.to_le_bytes(), 2.0f32.to_le_bytes()].concat(),
+        vec![1, 2, 3],
+    ]
+    .concat();
+    // key, offset, size, EAttributeTypes
+    let table = [("F", 0u64, 4u64, 8i32), ("S", 4, 6, 18), ("A", 10, 8, 63), ("X", 18, 3, 17)];
+    for multi in [true, false] {
+        let pkg = test_package(&[(custom::interchange(), multi.then_some(custom::IC_MULTIPLE_ALLOCATIONS_PER_ATTRIBUTE_IN_STORAGE_FIXED))]);
+        let mut b = [0u64.to_le_bytes().to_vec(), 0.1f32.to_le_bytes().to_vec(), (table.len() as i32).to_le_bytes().to_vec()].concat();
+        for (key, offset, size, ty) in table {
+            b.extend(fstring(key));
+            for v in [offset, size] {
+                if multi {
+                    b.extend(1i32.to_le_bytes());
+                }
+                b.extend(v.to_le_bytes());
+            }
+            b.extend(ty.to_le_bytes());
+            b.extend([0u8; 20]); // EAttributeProperty + hash
+        }
+        b.extend((storage.len() as i64).to_le_bytes());
+        b.extend(&storage);
+        let mut r = Reader::new(&b);
+        let attrs = rust_uasset::object::read_attribute_storage(&rust_uasset::property::PropReader::new(&pkg), &mut r, b.len()).unwrap();
+        assert_eq!(r.pos(), b.len());
+        let get = |k: &str| &attrs.iter().find(|p| p.name == k).unwrap().value;
+        assert!(matches!(get("F"), Value::Float(f) if *f == 1.5));
+        assert!(matches!(get("S"), Value::Str(s) if s == "hi"));
+        assert!(matches!(get("A"), Value::Array(a) if a.len() == 2));
+        assert!(matches!(get("X"), Value::Raw { bytes, .. } if bytes == &[1, 2, 3]), "{:?}", get("X"));
+    }
+}

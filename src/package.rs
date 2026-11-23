@@ -164,6 +164,14 @@ impl Package {
         }
     }
 
+    /// Overrides a custom version (`None` removes it), e.g. to decode hand-built data in tests.
+    pub fn set_custom_ver(&mut self, guid: Guid, ver: Option<i32>) {
+        match ver {
+            Some(v) => self.custom_version_map.insert(guid, v),
+            None => self.custom_version_map.remove(&guid),
+        };
+    }
+
     pub fn is_filter_editor_only(&self) -> bool {
         self.summary.package_flags & PKG_FILTER_EDITOR_ONLY != 0
     }

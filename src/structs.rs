@@ -67,7 +67,7 @@ pub fn has_native_parser(name: &str) -> bool {
                 | "SubstrateMaterialInput" | "VectorMaterialInput" | "Vector2MaterialInput" | "NavAgentSelector"
                 | "InstancedStruct" | "EdGraphPinType" | "NameCurveKey" | "StringCurveKey" | "FontCharacter"
                 | "DeprecateSlateVector2D" | "MovieSceneFrameRange" | "MovieSceneFloatChannel"
-                | "MovieSceneDoubleChannel"
+                | "MovieSceneDoubleChannel" | "FontData" | "MaterialOverrideNanite"
         )
 }
 
@@ -332,14 +332,23 @@ pub fn read_native(pr: &PropReader, r: &mut Reader, name: &str, size: Option<usi
             sv(name, f)
         }
         "InstancedStruct" => {
-            // Packages saved before FInstancedStructCustomVersion::CustomVersionAdded start with a u8 version.
-            // The custom version is not always present, so try both layouts and keep the one that decodes exactly.
-            let base = n.r.pos();
+            // Without FInstancedStructCustomVersion the data starts with an optional 0xABABABAB editor header and a
+            // u8 version. Some packages lack the custom version but have no version byte, so then try both layouts
+            // and keep the one that decodes exactly.
+            let start = n.r.pos();
+            let header = n.r.peek_bytes(4) == Some(&[0xAB; 4]);
+            let (base, skips): (usize, &[usize]) = if pkg.custom_ver(custom::instanced_struct()) >= custom::IS_CUSTOM_VERSION_ADDED {
+                (start, &[0])
+            } else if header {
+                (start + 4, &[1])
+            } else {
+                (start, &[0, 1])
+            };
             let valid_index = |i: i32| {
                 i == 0 || (i < 0 && ((-i - 1) as usize) < pkg.imports.len()) || (i > 0 && ((i - 1) as usize) < pkg.exports.len())
             };
             let mut fallback = None;
-            for skip in [0, 1] {
+            for &skip in skips {
                 n.r.seek(base)?;
                 if skip == 1 {
                     n.r.u8()?;
@@ -348,8 +357,8 @@ pub fn read_native(pr: &PropReader, r: &mut Reader, name: &str, size: Option<usi
                 if !valid_index(st) || serial < 0 || serial as usize > n.r.remaining() {
                     continue;
                 }
-                let start = n.r.pos();
-                let end = start + serial as usize;
+                let vstart = n.r.pos();
+                let end = vstart + serial as usize;
                 let sname = pkg.obj_name(st);
                 let inner = if serial == 0 {
                     Some(Value::Optional(None))
@@ -366,18 +375,55 @@ pub fn read_native(pr: &PropReader, r: &mut Reader, name: &str, size: Option<usi
                         break;
                     }
                     None if fallback.is_none() => {
-                        let raw = Value::Raw { type_name: sname, bytes: n.r.data()[start..end].to_vec(), note: "instanced struct".into() };
+                        let raw = Value::Raw { type_name: sname, bytes: n.r.data()[vstart..end].to_vec(), note: "instanced struct".into() };
                         fallback = Some((st, end, raw));
                     }
                     None => {}
                 }
             }
             let Some((st, end, inner)) = fallback else {
-                n.r.seek(base)?;
+                n.r.seek(start)?;
                 return Ok(None);
             };
             n.r.seek(end)?;
             sv(name, vec![("StructType", Value::Object(st)), ("Value", inner)])
+        }
+        "FontData" => {
+            // FFontData::Serialize (CompositeFont.cpp); older packages use plain tagged properties.
+            if pkg.custom_ver(custom::editor()) < custom::ED_ADDED_FONT_FACE_ASSETS {
+                return Ok(None);
+            }
+            let end = size.map(|s| n.r.pos() + s).unwrap_or(n.r.len());
+            if !n.r.bool32()? {
+                let fields = pr.read_properties(n.r, end, depth + 1)?;
+                return Ok(Some(Value::Struct(Box::new(StructValue { type_name: name.into(), fields, native: false }))));
+            }
+            let face = n.r.i32()?;
+            let mut f = vec![("FontFaceAsset", Value::Object(face))];
+            if face == 0 {
+                f.push(("FontFilename", Value::Str(n.r.fstring()?)));
+                f.push(("Hinting", Value::UInt(n.r.u8()? as u64)));
+                f.push(("LoadingPolicy", Value::UInt(n.r.u8()? as u64)));
+            }
+            f.push(("SubFaceIndex", Value::Int(n.r.i32()? as i64)));
+            sv(name, f)
+        }
+        "MaterialOverrideNanite" => {
+            // FMaterialOverrideNanite::Serialize (MaterialOverrideNanite.cpp)
+            if pkg.custom_ver(custom::fortnite_release()) < custom::FNR_NANITE_MATERIAL_OVERRIDE_USES_EDITOR_ONLY {
+                let r#ref = Value::SoftObject(pkg.read_soft_object_path(n.r)?);
+                let enable = Value::Bool(n.r.bool32()?);
+                let mat = Value::Object(n.r.i32()?);
+                sv(name, vec![("OverrideMaterialRef", r#ref), ("bEnableOverride", enable), ("OverrideMaterial", mat)])
+            } else {
+                let end = size.map(|s| n.r.pos() + s).unwrap_or(n.r.len());
+                let mut fields = vec![];
+                if n.r.bool32()? {
+                    fields.push(Property::new("OverrideMaterial", Value::Object(n.r.i32()?)));
+                }
+                fields.extend(pr.read_properties(n.r, end, depth + 1)?);
+                Value::Struct(Box::new(StructValue { type_name: name.into(), fields, native: false }))
+            }
         }
         "EdGraphPinType" => crate::graph::read_pin_type(pkg, n.r)?.to_value(),
         "MovieSceneFrameRange" => crate::movie_scene::read_frame_range(n.r)?,

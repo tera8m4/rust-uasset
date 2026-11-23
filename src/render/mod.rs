@@ -407,6 +407,10 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 Extra::PureState(_) => {}
+                Extra::Attributes(attrs) => {
+                    out.line(indent, format!("Attributes: ({})", attrs.len()));
+                    self.write_props(out, indent + 1, attrs);
+                }
             }
         }
     }

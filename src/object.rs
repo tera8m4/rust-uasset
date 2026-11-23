@@ -59,6 +59,8 @@ pub enum Extra {
     UserPins(Vec<UserPin>),
     /// UK2Node_DynamicCast pure state
     PureState(u8),
+    /// Interchange node FAttributeStorage: key -> value (type name in `Property::ty`).
+    Attributes(Vec<Property>),
 }
 
 #[derive(Debug, Clone)]
@@ -139,13 +141,15 @@ pub fn read_object(pkg: &Package, export_index: usize) -> Object {
     }
     let pr = PropReader::new(pkg);
 
-    // Exact class objects (UClass itself) don't serialize script properties.
-    let serializes_props = class != "Class" || e.class_index != 0;
     let mut props_end = None;
     if e.script_serialization_end_offset > e.script_serialization_start_offset && e.script_serialization_start_offset >= 0 {
         let _ = r.seek(start + e.script_serialization_start_offset as usize);
         props_end = Some(start + e.script_serialization_end_offset as usize);
     }
+    // Exact class objects (UClass itself) don't serialize script properties, neither do Interchange nodes
+    // (UInterchangeBaseNode::Serialize only writes its attribute storage).
+    let interchange = is_interchange_node(&class) && props_end.is_none();
+    let serializes_props = (class != "Class" || e.class_index != 0) && !interchange;
     let mut pre_props = vec![];
     if class.ends_with("ImportData") && pkg.ue4() >= ue4::ASSET_IMPORT_DATA_AS_JSON && !pkg.is_filter_editor_only() && props_end.is_none() {
         match r.fstring() {
@@ -195,7 +199,9 @@ pub fn read_object(pkg: &Package, export_index: usize) -> Object {
     }
 
     let tail = (|| -> Result<()> {
-        if class == "DataTable" || class == "CompositeDataTable" || class.ends_with("DataTable") {
+        if interchange {
+            obj.extras.push(Extra::Attributes(read_attribute_storage(&pr, &mut r, end)?));
+        } else if class == "DataTable" || class == "CompositeDataTable" || class.ends_with("DataTable") {
             obj.extras.push(Extra::DataTable(read_data_table(&pr, &obj, &mut r, end)?));
         } else if class == "ObjectRedirector" {
             if r.pos() + 4 <= end {
@@ -236,6 +242,145 @@ pub fn read_object(pkg: &Package, export_index: usize) -> Object {
         obj.undecoded_preview = hex(&pkg.data[r.pos()..r.pos() + n]);
     }
     obj
+}
+
+/// UInterchangeBaseNode subclasses (not UInterchangeBaseNodeContainer, which is a plain UObject).
+fn is_interchange_node(class: &str) -> bool {
+    class.starts_with("Interchange") && class.ends_with("Node")
+}
+
+/// EAttributeTypes (AttributeStorage.h), indexed by value.
+const ATTRIBUTE_TYPES: &[&str] = &[
+    "None", "Bool", "ByteArray", "ByteArray64", "Color", "DateTime", "Double", "Enum", "Float", "Guid", "Int8",
+    "Int16", "Int32", "Int64", "IntRect", "LinearColor", "Name", "RandomStream", "String", "Timespan", "TwoVectors",
+    "UInt8", "UInt16", "UInt32", "UInt64", "Vector2d", "IntPoint", "IntVector", "Vector2DHalf", "Float16",
+    "OrientedBox", "FrameNumber", "FrameRate", "FrameTime", "SoftObjectPath", "Matrix44f", "Matrix44d", "Plane4f",
+    "Plane4d", "Quat4f", "Quat4d", "Rotator3f", "Rotator3d", "Transform3f", "Transform3d", "Vector3f", "Vector3d",
+    "Vector2f", "Vector4f", "Vector4d", "Box2f", "Box2D", "Box3f", "Box3d", "BoxSphereBounds3f",
+    "BoxSphereBounds3d", "Sphere3f", "Sphere3d", "BoolArray", "ColorArray", "DateTimeArray", "DoubleArray",
+    "EnumArray", "FloatArray", "GuidArray", "Int8Array", "Int16Array", "Int32Array", "Int64Array", "IntRectArray",
+    "LinearColorArray", "NameArray", "RandomStreamArray", "StringArray", "TimespanArray", "TwoVectorsArray",
+    "UInt16Array", "UInt32Array", "UInt64Array", "Vector2dArray", "IntPointArray", "IntVectorArray",
+    "Vector2DHalfArray", "Float16Array", "OrientedBoxArray", "FrameNumberArray", "FrameRateArray",
+    "FrameTimeArray", "SoftObjectPathArray", "Matrix44fArray", "Matrix44dArray", "Plane4fArray", "Plane4dArray",
+    "Quat4fArray", "Quat4dArray", "Rotator3fArray", "Rotator3dArray", "Transform3fArray", "Transform3dArray",
+    "Vector3fArray", "Vector3dArray", "Vector2fArray", "Vector4fArray", "Vector4dArray", "Box2fArray", "Box2DArray",
+    "Box3fArray", "Box3dArray", "BoxSphereBounds3fArray", "BoxSphereBounds3dArray", "Sphere3fArray", "Sphere3dArray",
+    "InterchangeLODMeshData", "InterchangeLODMeshDataArray",
+];
+
+/// UE::Interchange::FAttributeStorage. Values are raw in-memory copies; strings are null terminated UTF-16.
+pub fn read_attribute_storage(pr: &PropReader, r: &mut Reader, end: usize) -> Result<Vec<Property>> {
+    let pkg = pr.pkg;
+    r.u64()?; // FragmentedMemoryCost
+    r.f32()?; // DefragRatio
+    let n = r.count(36)?;
+    let multi = pkg.custom_ver(custom::interchange()) >= custom::IC_MULTIPLE_ALLOCATIONS_PER_ATTRIBUTE_IN_STORAGE_FIXED;
+    let mut table = vec![];
+    for _ in 0..n {
+        let key = r.fstring()?;
+        let (mut offsets, mut sizes) = (vec![], vec![]);
+        if multi {
+            for v in [&mut offsets, &mut sizes] {
+                for _ in 0..r.count(8)? {
+                    v.push(r.u64()?);
+                }
+            }
+        } else {
+            offsets.push(r.u64()?);
+            sizes.push(r.u64()?);
+        }
+        let ty = r.i32()?;
+        r.u32()?; // EAttributeProperty
+        r.guid()?; // Hash
+        table.push((key, offsets, sizes, ty));
+    }
+    let len = r.i64()?;
+    if len < 0 || r.pos() + len as usize > end {
+        return invalid(format!("invalid attribute storage size {len}"));
+    }
+    let storage = r.bytes(len as usize)?;
+    let mut props = vec![];
+    for (key, offsets, sizes, ty) in table {
+        let ty_name = ATTRIBUTE_TYPES.get(ty as usize).copied().unwrap_or("?");
+        let chunks: Option<Vec<&[u8]>> = offsets
+            .iter()
+            .zip(&sizes)
+            .map(|(&o, &s)| storage.get(o as usize..(o as usize).checked_add(s as usize)?))
+            .collect();
+        let value = chunks
+            .as_deref()
+            .and_then(|c| decode_attribute(pr, ty_name, c))
+            .unwrap_or_else(|| Value::Raw {
+                type_name: ty_name.into(),
+                bytes: chunks.map(|c| c.concat()).unwrap_or_default(),
+                note: "attribute".into(),
+            });
+        props.push(Property { name: key, array_index: 0, ty: Some(TypeName::new(ty_name)), value });
+    }
+    Ok(props)
+}
+
+fn decode_attribute(pr: &PropReader, ty: &str, chunks: &[&[u8]]) -> Option<Value> {
+    let (base, array) = match ty.strip_suffix("Array") {
+        _ if ty.starts_with("ByteArray") => ("UInt8", true),
+        Some(b) => (b, true),
+        None => (ty, false),
+    };
+    let mut values = vec![];
+    for chunk in chunks {
+        let mut r = Reader::new(chunk);
+        if matches!(base, "String" | "Name" | "SoftObjectPath") {
+            let units: Vec<u16> = chunk.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+            let s = String::from_utf16_lossy(units.strip_suffix(&[0]).unwrap_or(&units));
+            values.push(match base {
+                "Name" => Value::Name(s),
+                "SoftObjectPath" => Value::SoftObject(s),
+                _ => Value::Str(s),
+            });
+            continue;
+        }
+        while r.remaining() > 0 {
+            let v = match base {
+                "Bool" => Value::Bool(r.u8().ok()? != 0),
+                "Int8" => Value::Int(r.i8().ok()? as i64),
+                "Int16" => Value::Int(r.i16().ok()? as i64),
+                "Int32" => Value::Int(r.i32().ok()? as i64),
+                "Int64" => Value::Int(r.i64().ok()?),
+                "UInt8" => Value::UInt(r.u8().ok()? as u64),
+                "UInt16" => Value::UInt(r.u16().ok()? as u64),
+                "UInt32" => Value::UInt(r.u32().ok()? as u64),
+                "UInt64" => Value::UInt(r.u64().ok()?),
+                "Float" => Value::Float(r.f32().ok()?),
+                "Double" => Value::Double(r.f64().ok()?),
+                // Enum size is only known for single values.
+                "Enum" if !array => Value::UInt(match chunk.len() {
+                    1 => r.u8().ok()? as u64,
+                    2 => r.u16().ok()? as u64,
+                    4 => r.u32().ok()? as u64,
+                    8 => r.u64().ok()?,
+                    _ => return None,
+                }),
+                "Guid" => Value::Guid(r.guid().ok()?),
+                // In-memory layouts of these match their native serialization (FColor is BGRA in memory too).
+                "Color" | "DateTime" | "Timespan" | "IntRect" | "LinearColor" | "TwoVectors" | "Vector2d" | "IntPoint"
+                | "IntVector" | "OrientedBox" | "FrameNumber" | "FrameRate" | "FrameTime" | "Matrix44f" | "Matrix44d"
+                | "Plane4f" | "Plane4d" | "Quat4f" | "Quat4d" | "Rotator3f" | "Rotator3d" | "Vector3f" | "Vector3d"
+                | "Vector2f" | "Vector4f" | "Vector4d" | "Sphere3f" | "Sphere3d" => {
+                    crate::structs::read_native(pr, &mut r, base, None, 0).ok()??
+                }
+                _ => return None,
+            };
+            values.push(v);
+        }
+    }
+    if array {
+        Some(Value::Array(values))
+    } else if values.len() == 1 {
+        values.pop()
+    } else {
+        None
+    }
 }
 
 /// Detects the UEdGraphNode pin array: count followed by (bNullPtr=0, OwningNode=self).

@@ -98,6 +98,7 @@ pub mod custom {
     }
     pub const ED_ROOT_META_DATA_SUPPORT: i32 = 3;
     pub const ED_TEXT_FORMAT_ARGUMENT_DATA_IS_VARIANT: i32 = 5;
+    pub const ED_ADDED_FONT_FACE_ASSETS: i32 = 9;
     pub const ED_CULTURE_INVARIANT_TEXT_SERIALIZATION_KEY_STABILITY: i32 = 32;
 
     pub fn release() -> Guid {
@@ -126,4 +127,21 @@ pub mod custom {
         Guid::from_u32s(0x7B5AE74C, 0xD2704C10, 0xA9585798, 0x0B212A5A)
     }
     pub const SEQ_SERIALIZE_FLOAT_CHANNEL_COMPLETELY: i32 = 12;
+
+    pub fn fortnite_release() -> Guid {
+        Guid::from_u32s(0xE7086368, 0x6B234C58, 0x84391B70, 0x16265E91)
+    }
+    pub const FNR_NANITE_MATERIAL_OVERRIDE_USES_EDITOR_ONLY: i32 = 11;
+
+    /// FInstancedStructCustomVersion (InstancedStruct.cpp)
+    pub fn instanced_struct() -> Guid {
+        Guid::from_u32s(0xE21E1CAA, 0xAF47425E, 0x89BF6AD4, 0x4C44A8BB)
+    }
+    pub const IS_CUSTOM_VERSION_ADDED: i32 = 0;
+
+    /// FInterchangeCustomVersion (InterchangeCustomVersion.cpp)
+    pub fn interchange() -> Guid {
+        Guid::from_u32s(0x92738C43, 0x29884D9C, 0x9A3D9BBE, 0x6EFF9FC0)
+    }
+    pub const IC_MULTIPLE_ALLOCATIONS_PER_ATTRIBUTE_IN_STORAGE_FIXED: i32 = 3;
 }

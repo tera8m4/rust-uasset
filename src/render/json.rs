@@ -202,6 +202,9 @@ impl J<'_> {
                     let _ = write!(s, ",\"userPins\":[{}]", parts.join(","));
                 }
                 Extra::PureState(_) => {}
+                Extra::Attributes(attrs) => {
+                    let _ = write!(s, ",\"attributes\":{}", self.props(attrs));
+                }
             }
         }
         if !o.errors.is_empty() {

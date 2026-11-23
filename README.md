@@ -78,6 +78,8 @@ target/release/uasset [OPTIONS] <PATH>...
 - **Material instances**: parent, scalar / vector / texture / static switch parameters, overrides.
 - **DataTables**: row struct and one line (or block) per row.
 - **DataAssets and any other asset**: all tagged properties of the main object.
+- **Interchange import data**: the attribute storage of Interchange nodes (source file, factory settings,
+  ...) under `Attributes`.
 - **User defined enums / structs**: values with display names, fields with types and defaults.
 
 ## Library
