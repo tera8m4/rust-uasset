@@ -288,9 +288,11 @@ impl J<'_> {
     fn section(&self, rate: FrameRate, s: &Section) -> String {
         let channels: Vec<String> = s.channels.iter().map(|c| self.channel(rate, c)).collect();
         format!(
-            "{{\"class\":{},\"range\":{},\"easeIn\":{},\"easeOut\":{},\"channels\":[{}],\"properties\":{}}}",
+            "{{\"class\":{},\"range\":{},\"rangeIsDefault\":{},\"keysOutsideRange\":{},\"easeIn\":{},\"easeOut\":{},\"channels\":[{}],\"properties\":{}}}",
             quote(&s.class),
-            range_json(rate, s.range),
+            range_json(rate, Some(s.effective_range())),
+            s.range.is_none(),
+            s.keys_outside_range(),
             self.ease(rate, s.ease_in.as_ref()),
             self.ease(rate, s.ease_out.as_ref()),
             channels.join(","),

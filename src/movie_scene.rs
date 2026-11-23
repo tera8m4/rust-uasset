@@ -200,6 +200,20 @@ impl FrameRange {
         Some(Self { lower: Bound::from_value(s.get("LowerBound")), upper: Bound::from_value(s.get("UpperBound")) })
     }
 
+    pub const ALL: FrameRange =
+        FrameRange { lower: Bound { kind: BoundKind::Open, frame: 0 }, upper: Bound { kind: BoundKind::Open, frame: 0 } };
+
+    /// Whether a key at `frame` is reached. A key exactly at an exclusive upper bound counts as reached,
+    /// since sections commonly end on their last key.
+    pub fn reaches(&self, frame: i32) -> bool {
+        let above = match self.lower.kind {
+            BoundKind::Open => true,
+            BoundKind::Inclusive => frame >= self.lower.frame,
+            BoundKind::Exclusive => frame > self.lower.frame,
+        };
+        above && (self.upper.kind == BoundKind::Open || frame <= self.upper.frame)
+    }
+
     /// Length in frames, None when a bound is open.
     pub fn frame_count(&self) -> Option<i32> {
         if self.lower.kind == BoundKind::Open || self.upper.kind == BoundKind::Open {
@@ -272,6 +286,25 @@ pub struct Section {
     pub channels: Vec<Channel>,
     /// Properties that are not channels, the range or the easing.
     pub extra_props: Vec<Property>,
+}
+
+impl Section {
+    /// The range the section is evaluated in: the stored one, or the class default when it is not stored.
+    /// UMovieSceneSection defaults to the single frame [0, 0]; event sections default to an infinite range.
+    pub fn effective_range(&self) -> FrameRange {
+        self.range.unwrap_or(if self.class.contains("Event") {
+            FrameRange::ALL
+        } else {
+            let zero = Bound { kind: BoundKind::Inclusive, frame: 0 };
+            FrameRange { lower: zero, upper: zero }
+        })
+    }
+
+    /// Number of keys in animated channels that the section range never reaches.
+    pub fn keys_outside_range(&self) -> usize {
+        let range = self.effective_range();
+        self.channels.iter().filter(|c| c.is_animated()).flat_map(|c| c.keys.iter()).filter(|k| !range.reaches(k.frame)).count()
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -38,6 +38,11 @@ fn animated_channels(scene: &MovieScene) -> usize {
     scene.all_tracks().flat_map(|t| t.sections.iter()).flat_map(|s| s.channels.iter()).filter(|c| c.is_animated()).count()
 }
 
+fn outside_note(scene: &MovieScene) -> String {
+    let n: usize = scene.all_tracks().flat_map(|t| t.sections.iter()).map(|s| s.keys_outside_range()).sum();
+    if n == 0 { String::new() } else { format!(", !! {n} keys outside section ranges") }
+}
+
 fn duration_text(scene: &MovieScene) -> String {
     scene.duration().map(|d| format!("{}s", number(d))).unwrap_or_else(|| "open range".into())
 }
@@ -55,12 +60,13 @@ pub fn write_animations(c: &Ctx, out: &mut Out, anims: &[WidgetAnimation]) {
             out.line(
                 0,
                 format!(
-                    "- {}: {}, {} bindings, {} tracks, {} channels",
+                    "- {}: {}, {} bindings, {} tracks, {} channels{}",
                     a.name,
                     duration_text(scene),
                     scene.bindings.len(),
                     scene.all_tracks().count(),
-                    animated_channels(scene)
+                    animated_channels(scene),
+                    outside_note(scene)
                 ),
             );
         }
@@ -172,23 +178,28 @@ fn write_section(c: &Ctx, out: &mut Out, s: &MovieScene, t: &Track, sec: &Sectio
             notes.push(format!("{label} {}{f}", seconds(rate, e.duration)));
         }
     }
+    let outside = sec.keys_outside_range();
+    if outside > 0 {
+        notes.push(format!("!! {outside} keys outside the section range are never reached"));
+    }
     let show_header = t.sections.len() > 1 || sec.range != s.playback_range && sec.range.is_some() || !notes.is_empty();
     let mut indent = 2;
     if show_header {
-        let range = sec.range.map(|r| range_text(rate, r)).unwrap_or_else(|| "default range".into());
+        let range = range_text(rate, sec.effective_range());
+        let range = if sec.range.is_none() { format!("default range {range}") } else { range };
         let notes = if notes.is_empty() { String::new() } else { format!(", {}", notes.join(", ")) };
         out.line(2, format!("{} {range}{notes}:", short_class(&sec.class)));
         indent = 3;
     }
     for ch in &sec.channels {
         if ch.is_animated() || c.opts.verbose {
-            write_channel(c, out, indent, rate, ch);
+            write_channel(c, out, indent, s, ch);
         }
     }
     write_extras(c, out, indent, &sec.extra_props);
 }
 
-fn write_channel(c: &Ctx, out: &mut Out, indent: usize, rate: FrameRate, ch: &Channel) {
+fn write_channel(c: &Ctx, out: &mut Out, indent: usize, s: &MovieScene, ch: &Channel) {
     let mut title = ch.name.clone();
     let mut notes = vec![];
     for (label, extrap) in [("pre", &ch.pre_infinity), ("post", &ch.post_infinity)] {
@@ -209,7 +220,7 @@ fn write_channel(c: &Ctx, out: &mut Out, indent: usize, rate: FrameRate, ch: &Ch
         out.line(indent, if ch.default.is_some() { title } else { format!("{title}: no keys") });
         return;
     }
-    let keys: Vec<String> = ch.keys.iter().map(|k| key_text(c, rate, ch, k)).collect();
+    let keys: Vec<String> = ch.keys.iter().map(|k| key_text(c, s, ch, k)).collect();
     let joined = keys.join(", ");
     if indent * 2 + title.len() + 2 + joined.len() <= MAX_LINE {
         out.line(indent, format!("{title}: {joined}"));
@@ -221,8 +232,10 @@ fn write_channel(c: &Ctx, out: &mut Out, indent: usize, rate: FrameRate, ch: &Ch
     }
 }
 
-fn key_text(c: &Ctx, rate: FrameRate, ch: &Channel, k: &Key) -> String {
+fn key_text(c: &Ctx, scene: &MovieScene, ch: &Channel, k: &Key) -> String {
+    let rate = scene.tick_resolution;
     let mut s = seconds(rate, k.frame);
+    s.push_str(&format!("[f{}]", number(rate.seconds(k.frame) * scene.display_rate.fps())));
     if c.opts.verbose {
         s.push_str(&format!("(tick {})", k.frame));
     }

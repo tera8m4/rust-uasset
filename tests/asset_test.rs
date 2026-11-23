@@ -265,9 +265,9 @@ fn widget_animation_tracks() {
     assert_eq!(channel_keys(channel), [(0, Some(0)), (60000, Some(1))]);
 
     let text = asset.to_text(&Options { animations: true, ..Options::default() });
-    assert!(text.contains("IntegerCurve: 0s=0, 0.5s=1, 1s=2"), "{text}");
-    assert!(text.contains("FloatCurve: 0s=0.0 cubic, 1s=1.0 cubic"), "{text}");
-    assert!(text.contains("ByteCurve: 0s=Visible, 1s=Collapsed"), "{text}");
+    assert!(text.contains("IntegerCurve: 0s[f0]=0, 0.5s[f10]=1, 1s[f20]=2"), "{text}");
+    assert!(text.contains("FloatCurve: 0s[f0]=0.0 cubic, 1s[f20]=1.0 cubic"), "{text}");
+    assert!(text.contains("ByteCurve: 0s[f0]=Visible, 1s[f20]=Collapsed"), "{text}");
 
     let summary = asset.to_text(&Options::default());
     assert!(summary.contains("- SwitchImages: 1s, 2 bindings, 3 tracks, 3 channels"), "{summary}");
@@ -374,4 +374,36 @@ fn instanced_struct_layouts() {
         assert!(matches!(field(&v, "StructType"), Value::Object(-1)));
         assert!(matches!(field(&v, "Value"), Value::Struct(s) if s.fields.is_empty()), "{v:?}");
     }
+}
+
+/// A section without a stored SectionRange uses the class default: [0, 0] for property sections,
+/// infinite for event sections. Keys outside the range are never reached.
+#[test]
+fn section_default_range() {
+    use movie_scene::{Channel, Key, Section};
+    let key = |frame| Key { frame, value: Value::Float(1.0), curve: None };
+    let section = |class: &str| Section {
+        index: 1,
+        class: class.into(),
+        range: None,
+        ease_in: None,
+        ease_out: None,
+        channels: vec![Channel {
+            name: "Curve".into(),
+            type_name: "MovieSceneFloatChannel".into(),
+            pre_infinity: None,
+            post_infinity: None,
+            default: None,
+            enum_name: None,
+            keys: vec![key(0), key(6000)],
+            value_count: 2,
+        }],
+        extra_props: vec![],
+    };
+    let float = section("MovieSceneFloatSection");
+    assert!(float.effective_range().reaches(0));
+    assert_eq!(float.keys_outside_range(), 1);
+    let event = section("MovieSceneEventTriggerSection");
+    assert_eq!(event.effective_range(), movie_scene::FrameRange::ALL);
+    assert_eq!(event.keys_outside_range(), 0);
 }
