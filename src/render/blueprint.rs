@@ -824,6 +824,7 @@ pub fn render(c: &mut Ctx, out: &mut Out, bp: &Object) {
     for a in anims.into_iter().chain(compiled) {
         c.cover_subtree(a);
     }
+    let extensions_shown = super::mvvm::write_view(c, out, bp);
 
     // Class defaults
     if let Some(d) = cdo {
@@ -932,7 +933,7 @@ pub fn render(c: &mut Ctx, out: &mut Out, bp: &Object) {
         "bLegacyNeedToPurgeSkelRefs", "IntermediateGeneratedGraphs", "EventGraphs", "PaletteCategory",
         "bLegacyGeneratedClassIsAuthoritative", "BlueprintNamespace", "ImportedNamespaces", "ComponentTemplates", "Timelines",
     ];
-    let rest: Vec<_> = bp.properties.iter().filter(|p| !shown.contains(&p.name.as_str())).cloned().collect();
+    let rest: Vec<_> = bp.properties.iter().filter(|p| !(shown.contains(&p.name.as_str()) || extensions_shown && p.name == "Extensions")).cloned().collect();
     let timelines = objects_in(bp.prop("Timelines"));
     if !rest.is_empty() || !timelines.is_empty() {
         out.blank();

@@ -28,7 +28,9 @@ target/release/uasset [OPTIONS] <PATH>...
 
 - **Blueprints** (actor, widget, anim, editor utility, ...): parent class, interfaces, variables with
   types, defaults and flags, component tree (SCS) and inherited component overrides, widget tree with
-  slot settings, class defaults, and every graph as pseudocode:
+  slot settings, MVVM view models and view bindings (one line each, e.g.
+  `Label.Text <- PlayerVM.Health [OneWayToDestination]`, conversion functions shown as calls), class
+  defaults, and every graph as pseudocode:
 
   ```
   event ReceiveBeginPlay() [override] {

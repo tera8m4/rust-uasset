@@ -4,6 +4,7 @@ pub mod anim;
 pub mod blueprint;
 pub mod json;
 pub mod material;
+pub mod mvvm;
 
 use std::collections::HashSet;
 use std::fmt::Write as _;

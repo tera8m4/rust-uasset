@@ -559,3 +559,45 @@ fn interchange_attribute_storage() {
         assert!(matches!(get("X"), Value::Raw { bytes, .. } if bytes == &[1, 2, 3]), "{:?}", get("X"));
     }
 }
+
+/// MVVM view bindings print as `Target <- Value [Mode, flags]`.
+#[test]
+fn mvvm_binding_line() {
+    use rust_uasset::property::{Property, StructValue};
+    use rust_uasset::reader::Guid;
+    use rust_uasset::render::{Ctx, mvvm};
+    let st = |fields: Vec<(&str, Value)>| {
+        Value::Struct(Box::new(StructValue {
+            type_name: String::new(),
+            fields: fields.into_iter().map(|(n, v)| Property::new(n, v)).collect(),
+            native: false,
+        }))
+    };
+    let member = |n: &str| st(vec![("BindingReference", st(vec![("MemberName", Value::Name(n.into()))]))]);
+    let vm = Guid::from_u32s(1, 2, 3, 4);
+    let source = st(vec![
+        ("Paths", Value::Array(vec![member("Gauge"), member("Value")])),
+        ("ContextId", Value::Guid(vm)),
+        ("Source", Value::Enum("EMVVMBlueprintFieldPathSource::ViewModel".into())),
+    ]);
+    let dest = st(vec![
+        ("Paths", Value::Array(vec![member("Text")])),
+        ("WidgetName", Value::Name("Label".into())),
+        ("Source", Value::Enum("EMVVMBlueprintFieldPathSource::Widget".into())),
+    ]);
+    let binding = |extra: Vec<(&str, Value)>| {
+        let mut f = vec![("SourcePath", source.clone()), ("DestinationPath", dest.clone())];
+        f.extend(extra);
+        st(f)
+    };
+    let asset = Asset::open(&test_data_path("WBP_AnimTest.uasset")).unwrap();
+    let opts = Options::default();
+    let c = Ctx { pkg: &asset.package, objs: &asset.objects, opts: &opts, covered: HashSet::new() };
+    let vms = vec![(vm, "PlayerVM".to_string())];
+    let line = |b: Value| mvvm::binding_line(&c, &vms, b.as_struct().unwrap());
+    assert_eq!(line(binding(vec![])), "Label.Text <- PlayerVM.Gauge.Value [OneWayToDestination]");
+    let two_way = binding(vec![("BindingType", Value::Enum("EMVVMBindingMode::TwoWay".into())), ("bEnabled", Value::Bool(false))]);
+    assert_eq!(line(two_way), "Label.Text <-> PlayerVM.Gauge.Value [TwoWay, disabled]");
+    let to_source = binding(vec![("BindingType", Value::Enum("EMVVMBindingMode::OneWayToSource".into()))]);
+    assert_eq!(line(to_source), "PlayerVM.Gauge.Value <- Label.Text [OneWayToSource]");
+}
